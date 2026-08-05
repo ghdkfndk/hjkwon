@@ -803,6 +803,140 @@ def build_report(
 
 
 # ---------------------------------------------------------------------------
+# 이메일 발송
+# ---------------------------------------------------------------------------
+
+def _markdown_to_html(md: str) -> str:
+    """마크다운을 간단한 HTML로 변환 (이메일용)."""
+    html = md
+
+    html = re.sub(r"^# (.+)$", r"<h1>\1</h1>", html, flags=re.MULTILINE)
+    html = re.sub(r"^## (.+)$", r"<h2>\1</h2>", html, flags=re.MULTILINE)
+    html = re.sub(r"^### (.+)$", r"<h3>\1</h3>", html, flags=re.MULTILINE)
+
+    html = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", html)
+    html = re.sub(r"\*(.+?)\*", r"<em>\1</em>", html)
+
+    html = re.sub(r"\[(.+?)\]\((.+?)\)", r'<a href="\2">\1</a>', html)
+
+    html = re.sub(r"!\[(.+?)\]\((.+?)\)", r'<img src="\2" alt="\1" style="max-width:100%"/>', html)
+
+    lines = html.split("\n")
+    result = []
+    in_table = False
+    for line in lines:
+        if line.startswith("|") and "|" in line[1:]:
+            cells = [c.strip() for c in line.split("|")[1:-1]]
+            if all(set(c) <= set("-| ") for c in cells):
+                continue
+            if not in_table:
+                result.append('<table border="1" cellpadding="8" cellspacing="0" '
+                              'style="border-collapse:collapse;border-color:#ddd;">')
+                row_tag = "th"
+                in_table = True
+            else:
+                row_tag = "td"
+            result.append("<tr>" + "".join(f"<{row_tag}>{c}</{row_tag}>" for c in cells) + "</tr>")
+        else:
+            if in_table:
+                result.append("</table>")
+                in_table = False
+            if line.startswith("> "):
+                result.append(f'<blockquote style="border-left:4px solid #1976D2;'
+                              f'padding:8px 12px;color:#555;">{line[2:]}</blockquote>')
+            elif line.startswith("- "):
+                result.append(f"<li>{line[2:]}</li>")
+            elif line.strip() == "---":
+                result.append("<hr/>")
+            elif line.strip():
+                result.append(f"<p>{line}</p>")
+            else:
+                result.append("<br/>")
+    if in_table:
+        result.append("</table>")
+
+    body = "\n".join(result)
+    return f"""<!DOCTYPE html>
+<html><head><meta charset="utf-8"/><style>
+body {{ font-family: -apple-system, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; color: #333; }}
+h1 {{ color: #1565C0; }} h2 {{ color: #1976D2; border-bottom: 2px solid #E3F2FD; padding-bottom: 8px; }}
+h3 {{ color: #1E88E5; }} table {{ width: 100%; margin: 12px 0; }}
+th {{ background: #1565C0; color: white; }} td {{ background: #FAFAFA; }}
+a {{ color: #1976D2; }} img {{ max-width: 100%; height: auto; margin: 12px 0; }}
+li {{ margin: 4px 0; }}
+</style></head><body>{body}</body></html>"""
+
+
+def send_email(title: str, body_md: str, chart_paths: list[str] | None = None) -> None:
+    """이메일로 리포트를 발송한다.
+
+    환경 변수:
+        EMAIL_TO:       수신자 이메일
+        EMAIL_FROM:     발신자 이메일 (Gmail 주소)
+        EMAIL_PASSWORD: Gmail 앱 비밀번호
+        EMAIL_SMTP:     SMTP 서버 (기본: smtp.gmail.com)
+        EMAIL_PORT:     SMTP 포트 (기본: 587)
+    """
+    import smtplib
+    from email.mime.multipart import MIMEMultipart
+    from email.mime.text import MIMEText
+    from email.mime.image import MIMEImage
+
+    to_addr = os.environ.get("EMAIL_TO", "")
+    from_addr = os.environ.get("EMAIL_FROM", "")
+    password = os.environ.get("EMAIL_PASSWORD", "")
+
+    if not all([to_addr, from_addr, password]):
+        print("[INFO] 이메일 설정이 없어 발송을 건너뜁니다. "
+              "(EMAIL_TO, EMAIL_FROM, EMAIL_PASSWORD 환경 변수 필요)")
+        return
+
+    smtp_server = os.environ.get("EMAIL_SMTP", "smtp.gmail.com")
+    smtp_port = int(os.environ.get("EMAIL_PORT", "587"))
+
+    msg = MIMEMultipart("related")
+    msg["Subject"] = title
+    msg["From"] = from_addr
+    msg["To"] = to_addr
+
+    html_body = _markdown_to_html(body_md)
+
+    if chart_paths:
+        for i, path in enumerate(chart_paths):
+            cid = f"chart_{i}"
+            html_body = html_body.replace(
+                os.path.basename(path),
+                f"cid:{cid}",
+            )
+
+    msg_alt = MIMEMultipart("alternative")
+    msg_alt.attach(MIMEText(body_md, "plain", "utf-8"))
+    msg_alt.attach(MIMEText(html_body, "html", "utf-8"))
+    msg.attach(msg_alt)
+
+    if chart_paths:
+        for i, path in enumerate(chart_paths):
+            try:
+                with open(path, "rb") as f:
+                    img = MIMEImage(f.read())
+                    img.add_header("Content-ID", f"<chart_{i}>")
+                    img.add_header("Content-Disposition", "inline",
+                                   filename=os.path.basename(path))
+                    msg.attach(img)
+            except FileNotFoundError:
+                print(f"[WARN] 차트 파일 없음: {path}", file=sys.stderr)
+
+    try:
+        with smtplib.SMTP(smtp_server, smtp_port) as server:
+            server.starttls()
+            server.login(from_addr, password)
+            server.send_message(msg)
+        print(f"[INFO] 이메일 발송 완료: {to_addr}")
+    except Exception as exc:
+        print(f"[ERROR] 이메일 발송 실패: {exc}", file=sys.stderr)
+
+
+# ---------------------------------------------------------------------------
 # GitHub Issue 생성
 # ---------------------------------------------------------------------------
 
@@ -948,6 +1082,10 @@ def main() -> None:
     now = datetime.now(KST)
     issue_title = f"📊 일일 증시 분석 리포트 - {now.strftime('%Y-%m-%d')}"
     create_github_issue(issue_title, report)
+
+    # --- 이메일 발송 ---
+    email_charts = [cr["chart_path"] for cr in chart_results if cr.get("chart_path")]
+    send_email(issue_title, report, email_charts)
 
     print("[INFO] 완료!")
 
