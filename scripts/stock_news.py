@@ -519,6 +519,53 @@ def build_report(
         "",
     ]
 
+    # --- 결론 먼저 ---
+    if chart_results:
+        grade_emoji = {"A": "🟢", "B": "🔵", "C": "🟡", "D": "🟠", "F": "🔴"}
+        sorted_by_score = sorted(chart_results, key=lambda x: x.get("score", 0), reverse=True)
+
+        lines.append("## 🏆 오늘의 결론")
+        lines.append("")
+        lines.append("| 종목 | 스코어 | 등급 | 핵심 근거 |")
+        lines.append("|---|---|---|---|")
+        for cr in sorted_by_score:
+            emoji = grade_emoji.get(cr.get("grade", "C"), "⚪")
+            details = cr.get("score_details", [])
+            reason = " / ".join(details[:2]) if details else "-"
+            lines.append(
+                f"| **{cr['name']}** ({cr['ticker']}) "
+                f"| **{cr.get('score', '-')}**/100 "
+                f"| {emoji} {cr.get('grade', '-')} "
+                f"| {reason} |"
+            )
+        lines.append("")
+
+        best = sorted_by_score[0]
+        worst = sorted_by_score[-1]
+        best_emoji = grade_emoji.get(best.get("grade", "C"), "⚪")
+        worst_emoji = grade_emoji.get(worst.get("grade", "C"), "⚪")
+        lines.append(
+            f"> {best_emoji} **가장 유망**: {best['name']}({best['ticker']}) "
+            f"— 스코어 {best.get('score', '-')}점"
+        )
+        if len(sorted_by_score) > 1:
+            lines.append(
+                f"> {worst_emoji} **가장 주의**: {worst['name']}({worst['ticker']}) "
+                f"— 스코어 {worst.get('score', '-')}점"
+            )
+        lines.append("")
+
+    # --- 감성 분석 요약도 상단에 ---
+    if sentiment_data:
+        lines.append("### 📰 뉴스 감성 요약")
+        lines.append("")
+        for s in sentiment_data:
+            lines.append(f"- **{s['name']}**({s['ticker']}): {s['overall']} (점수 {s['avg_score']:+.2f})")
+        lines.append("")
+
+    lines.append("---")
+    lines.append("")
+
     # --- 1단계: 주요 뉴스 ---
     lines.append("## 📰 1단계: 주요 증시 뉴스")
     lines.append("")
