@@ -542,23 +542,31 @@ def build_report(
             )
         lines.append("")
 
+        lines.append("| 종목 | 스코어 | 등급 | 분석 |")
+        lines.append("|---|---|---|---|")
         for cr in sorted_by_score:
             emoji = grade_emoji.get(cr.get("grade", "C"), "⚪")
-            lines.append(f"**{emoji} {cr['name']}** ({cr['ticker']}) — **{cr.get('score', '-')}점** 등급 {cr.get('grade', '-')}")
             details = cr.get("score_details", [])
+            detail_parts = []
             for detail in details:
                 for sub in detail.split("\n"):
                     sub = sub.strip().lstrip("- ").strip()
                     if sub:
-                        lines.append(f"- {sub}")
-            lines.append("")
+                        detail_parts.append(sub)
+            reason_html = "<br>".join(detail_parts) if detail_parts else "-"
 
-    # --- 감성 분석 요약도 상단에 ---
-    if sentiment_data:
-        lines.append("### 📰 뉴스 감성 요약")
-        lines.append("")
-        for s in sentiment_data:
-            lines.append(f"- **{s['name']}**({s['ticker']}): {s['overall']} (점수 {s['avg_score']:+.2f})")
+            # 감성 추가
+            for s in (sentiment_data or []):
+                if s["ticker"] == cr["ticker"]:
+                    reason_html += f"<br>뉴스 감성: {s['overall']}"
+                    break
+
+            lines.append(
+                f"| **{cr['name']}** ({cr['ticker']}) "
+                f"| **{cr.get('score', '-')}**/100 "
+                f"| {emoji} {cr.get('grade', '-')} "
+                f"| {reason_html} |"
+            )
         lines.append("")
 
     lines.append("---")
@@ -1142,39 +1150,33 @@ def build_summary_email(
                           f"{worst['name']}({worst['ticker']}) — {worst.get('score', '-')}점")
         lines.append("")
 
+        lines.append("| 종목 | 스코어 | 등급 | 분석 |")
+        lines.append("|---|---|---|---|")
         for cr in sorted_by_score:
             emoji = grade_emoji.get(cr.get("grade", "C"), "⚪")
-            lines.append(f"**{emoji} {cr['name']}** ({cr['ticker']}) — **{cr.get('score', '-')}점** 등급 {cr.get('grade', '-')}")
             details = cr.get("score_details", [])
+            detail_parts = []
             for detail in details:
                 for sub in detail.split("\n"):
                     sub = sub.strip().lstrip("- ").strip()
                     if sub:
-                        lines.append(f"- {sub}")
-            lines.append("")
+                        detail_parts.append(sub)
 
-    # --- 감성 요약 ---
-    if sentiment_data:
-        lines.append("## 📰 뉴스 감성")
-        lines.append("")
-        for s in sentiment_data:
-            lines.append(f"- **{s['name']}**({s['ticker']}): {s['overall']}")
-        lines.append("")
+            for s in (sentiment_data or []):
+                if s["ticker"] == cr["ticker"]:
+                    detail_parts.append(f"뉴스 감성: {s['overall']}")
+                    break
 
-    # --- 핵심 지표 ---
-    if chart_results:
-        lines.append("## 📊 핵심 지표")
-        lines.append("")
-        lines.append("| 종목 | 현재가 | PER | PBR | 1개월 수익률 |")
-        lines.append("|---|---|---|---|---|")
-        for cr in sorted(chart_results, key=lambda x: x.get("score", 0), reverse=True):
-            price_str = f"${cr['current_price']:.2f}" if cr.get("current_price") else "N/A"
-            details = cr.get("score_details", [])
-            monthly = next((d for d in details if "수익률" in d), "-")
+            price_str = f"${cr['current_price']:.2f}" if cr.get("current_price") else ""
+            if price_str:
+                detail_parts.insert(0, f"현재가: {price_str}")
+
+            reason_html = "<br>".join(detail_parts) if detail_parts else "-"
             lines.append(
-                f"| {cr['name']} | {price_str} "
-                f"| {cr['pe_ratio']} | {cr['pb_ratio']} "
-                f"| {monthly} |"
+                f"| **{cr['name']}** ({cr['ticker']}) "
+                f"| **{cr.get('score', '-')}**/100 "
+                f"| {emoji} {cr.get('grade', '-')} "
+                f"| {reason_html} |"
             )
         lines.append("")
 
