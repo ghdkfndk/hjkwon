@@ -504,8 +504,10 @@ def build_report(
     news_items: list[dict],
     ticker_headlines: dict[str, list[str]],
     sentiment_data: list[dict],
+    chart_results: list[dict],
     fool_analysis: dict[str, list[dict]],
     fool_general: list[dict],
+    gh_repo: str = "",
 ) -> str:
     now = datetime.now(KST)
     date_str = now.strftime("%Y년 %m월 %d일 %H:%M KST")
@@ -609,6 +611,34 @@ def build_report(
     else:
         lines.append("감성 분석할 종목이 없습니다.")
         lines.append("")
+
+    # --- 종목 차트 ---
+    if chart_results:
+        lines.append("---")
+        lines.append("")
+        lines.append("## 📈 종목별 1개월 차트 & 핵심 지표")
+        lines.append("")
+
+        for cr in chart_results:
+            lines.append(f"### {cr['name']} ({cr['ticker']})")
+            lines.append("")
+            lines.append(f"| 지표 | 값 |")
+            lines.append(f"|---|---|")
+            if cr.get("current_price"):
+                lines.append(f"| 현재가 | ${cr['current_price']:.2f} |")
+            lines.append(f"| 시가총액 | {cr['market_cap']} |")
+            lines.append(f"| PER | {cr['pe_ratio']} |")
+            lines.append(f"| PBR | {cr['pb_ratio']} |")
+            lines.append("")
+
+            if gh_repo and cr.get("chart_path"):
+                filename = os.path.basename(cr["chart_path"])
+                img_url = f"https://raw.githubusercontent.com/{gh_repo}/main/charts/{filename}"
+                lines.append(f"![{cr['name']} 차트]({img_url})")
+                lines.append("")
+            elif cr.get("chart_path"):
+                lines.append(f"*(차트: {cr['chart_path']})*")
+                lines.append("")
 
     # --- 2단계: Motley Fool 분석 ---
     lines.append("---")
@@ -751,9 +781,49 @@ def main() -> None:
         art["title_kr"] = kr
     print("[INFO] Fool 기사 번역 완료")
 
+    # --- 차트 생성 ---
+    chart_results = []
+    try:
+        from scripts.stock_charts import generate_charts_for_tickers
+        print("\n[차트] 종목별 1개월 차트 생성 중...")
+        chart_results = generate_charts_for_tickers(
+            list(tickers_found), STOCK_TICKERS, "charts"
+        )
+        print(f"[INFO] {len(chart_results)}개 종목 차트 생성 완료")
+    except ImportError:
+        try:
+            from stock_charts import generate_charts_for_tickers
+            print("\n[차트] 종목별 1개월 차트 생성 중...")
+            chart_results = generate_charts_for_tickers(
+                list(tickers_found), STOCK_TICKERS, "charts"
+            )
+            print(f"[INFO] {len(chart_results)}개 종목 차트 생성 완료")
+        except ImportError:
+            print("\n[WARN] stock_charts 모듈을 찾을 수 없습니다. 차트 생성을 건너뜁니다.")
+
+    # --- 차트를 GitHub에 업로드 ---
+    gh_repo = os.environ.get("GH_REPO", "")
+    if gh_repo and chart_results:
+        print("\n[업로드] 차트 이미지를 GitHub에 커밋 중...")
+        try:
+            subprocess.run(["git", "add", "charts/"], capture_output=True, timeout=10)
+            subprocess.run(
+                ["git", "commit", "-m", "Update stock charts"],
+                capture_output=True, timeout=10,
+            )
+            subprocess.run(
+                ["git", "push"], capture_output=True, timeout=30,
+            )
+            print("[INFO] 차트 업로드 완료")
+        except Exception as exc:
+            print(f"[WARN] 차트 업로드 실패: {exc}", file=sys.stderr)
+
     # --- 리포트 ---
     print("\n[리포트] 생성 중...")
-    report = build_report(filtered, ticker_headlines, sentiment_data, fool_matched, fool_general)
+    report = build_report(
+        filtered, ticker_headlines, sentiment_data, chart_results,
+        fool_matched, fool_general, gh_repo,
+    )
 
     print("\n" + report + "\n")
 

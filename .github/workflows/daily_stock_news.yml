@@ -1,4 +1,4 @@
-name: 📊 일일 증시 분석 리포트 (뉴스 + Motley Fool)
+name: 📊 일일 증시 분석 리포트 (뉴스 + Motley Fool + 차트)
 
 on:
   schedule:
@@ -8,6 +8,7 @@ on:
 
 permissions:
   issues: write
+  contents: write
 
 jobs:
   stock-news:
@@ -20,6 +21,11 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          sudo apt-get update -qq && sudo apt-get install -y -qq fonts-nanum
 
       - name: Run stock news script
         env:
