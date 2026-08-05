@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """
-종목별 1개월 주가·시총·PER·PBR 차트를 생성하는 모듈.
+종목별 1개월 주가 차트 + 자동 투자 스코어를 생성하는 모듈.
 
 yfinance로 데이터를 가져오고 matplotlib로 차트를 그린다.
-GitHub Issue에 삽입할 수 있도록 이미지 파일로 저장.
 """
 
 import os
 import sys
+import math
 from datetime import datetime, timedelta
 
 try:
@@ -17,14 +17,14 @@ try:
     import matplotlib.pyplot as plt
     import matplotlib.font_manager as fm
     import matplotlib.dates as mdates
-    import matplotlib.ticker as mticker
+    import matplotlib.patches as patches
+    import numpy as np
     HAS_DEPS = True
 except ImportError:
     HAS_DEPS = False
 
 
 def _setup_korean_font() -> None:
-    """한글 폰트를 설정한다."""
     korean_fonts = [f.name for f in fm.fontManager.ttflist if "Nanum" in f.name]
     if korean_fonts:
         plt.rcParams["font.family"] = korean_fonts[0]
@@ -32,7 +32,6 @@ def _setup_korean_font() -> None:
 
 
 def fetch_stock_data(ticker: str, period: str = "1mo") -> dict | None:
-    """yfinance에서 종목 데이터를 가져온다."""
     try:
         stock = yf.Ticker(ticker)
         hist = stock.history(period=period)
@@ -52,6 +51,10 @@ def fetch_stock_data(ticker: str, period: str = "1mo") -> dict | None:
             "current_price": info.get("currentPrice") or info.get("regularMarketPrice"),
             "currency": info.get("currency", "USD"),
             "sector": info.get("sector", ""),
+            "52w_high": info.get("fiftyTwoWeekHigh"),
+            "52w_low": info.get("fiftyTwoWeekLow"),
+            "dividend_yield": info.get("dividendYield"),
+            "beta": info.get("beta"),
         }
     except Exception as exc:
         print(f"[WARN] {ticker} 데이터 가져오기 실패: {exc}", file=sys.stderr)
@@ -59,15 +62,14 @@ def fetch_stock_data(ticker: str, period: str = "1mo") -> dict | None:
 
 
 def _format_large_number(num: float | None) -> str:
-    """큰 숫자를 읽기 쉽게 포맷."""
     if num is None:
         return "N/A"
     if num >= 1e12:
         return f"${num / 1e12:.2f}T"
     if num >= 1e9:
-        return f"${num / 1e9:.2f}B"
+        return f"${num / 1e9:.1f}B"
     if num >= 1e6:
-        return f"${num / 1e6:.2f}M"
+        return f"${num / 1e6:.1f}M"
     return f"${num:,.0f}"
 
 
@@ -77,12 +79,177 @@ def _format_ratio(val: float | None) -> str:
     return f"{val:.2f}"
 
 
+# ---------------------------------------------------------------------------
+# 투자 스코어 계산
+# ---------------------------------------------------------------------------
+
+def calculate_investment_score(data: dict) -> dict:
+    """다양한 지표를 종합하여 0~100 투자 스코어를 산출한다."""
+    scores = {}
+    details = []
+
+    hist = data["history"]
+    if len(hist) < 2:
+        return {"total": 50, "grade": "C", "details": ["데이터 부족"], "scores": {}}
+
+    # 1. 모멘텀 점수 (1개월 수익률 기반, 25점)
+    start_price = hist["Close"].iloc[0]
+    end_price = hist["Close"].iloc[-1]
+    monthly_return = ((end_price - start_price) / start_price) * 100
+
+    if monthly_return > 15:
+        momentum = 25
+    elif monthly_return > 5:
+        momentum = 20
+    elif monthly_return > 0:
+        momentum = 15
+    elif monthly_return > -5:
+        momentum = 10
+    elif monthly_return > -15:
+        momentum = 5
+    else:
+        momentum = 0
+    scores["모멘텀"] = momentum
+    details.append(f"1개월 수익률: {monthly_return:+.1f}%")
+
+    # 2. 밸류에이션 점수 (PER 기반, 25점)
+    pe = data.get("pe_ratio")
+    if pe is not None:
+        if pe < 0:
+            valuation = 0
+            details.append(f"PER: {pe:.1f} (적자)")
+        elif pe < 15:
+            valuation = 25
+            details.append(f"PER: {pe:.1f} (저평가)")
+        elif pe < 25:
+            valuation = 20
+            details.append(f"PER: {pe:.1f} (적정)")
+        elif pe < 40:
+            valuation = 15
+            details.append(f"PER: {pe:.1f} (고평가)")
+        elif pe < 80:
+            valuation = 10
+            details.append(f"PER: {pe:.1f} (고평가)")
+        else:
+            valuation = 5
+            details.append(f"PER: {pe:.1f} (매우 고평가)")
+    else:
+        valuation = 12
+        details.append("PER: N/A")
+    scores["밸류에이션"] = valuation
+
+    # 3. 안정성 점수 (변동성 기반, 25점)
+    returns = hist["Close"].pct_change().dropna()
+    volatility = returns.std() * 100
+    if volatility < 1.5:
+        stability = 25
+    elif volatility < 2.5:
+        stability = 20
+    elif volatility < 4.0:
+        stability = 15
+    elif volatility < 6.0:
+        stability = 10
+    else:
+        stability = 5
+    scores["안정성"] = stability
+    details.append(f"일간 변동성: {volatility:.2f}%")
+
+    # 4. 52주 위치 점수 (25점)
+    high_52 = data.get("52w_high")
+    low_52 = data.get("52w_low")
+    current = data.get("current_price") or end_price
+    if high_52 and low_52 and high_52 != low_52:
+        position = (current - low_52) / (high_52 - low_52)
+        if position > 0.9:
+            pos_score = 10
+            details.append(f"52주 위치: 상단 {position*100:.0f}%")
+        elif position > 0.7:
+            pos_score = 20
+            details.append(f"52주 위치: 중상단 {position*100:.0f}%")
+        elif position > 0.4:
+            pos_score = 25
+            details.append(f"52주 위치: 중간 {position*100:.0f}%")
+        elif position > 0.2:
+            pos_score = 20
+            details.append(f"52주 위치: 중하단 {position*100:.0f}%")
+        else:
+            pos_score = 15
+            details.append(f"52주 위치: 하단 {position*100:.0f}%")
+    else:
+        pos_score = 12
+        details.append("52주 위치: N/A")
+    scores["52주 위치"] = pos_score
+
+    total = sum(scores.values())
+
+    if total >= 80:
+        grade = "A"
+    elif total >= 65:
+        grade = "B"
+    elif total >= 50:
+        grade = "C"
+    elif total >= 35:
+        grade = "D"
+    else:
+        grade = "F"
+
+    return {
+        "total": total,
+        "grade": grade,
+        "details": details,
+        "scores": scores,
+    }
+
+
+def _draw_score_gauge(ax, score: int, grade: str) -> None:
+    """반원형 게이지로 투자 스코어를 표시한다."""
+    ax.set_xlim(-1.3, 1.3)
+    ax.set_ylim(-0.3, 1.3)
+    ax.set_aspect("equal")
+    ax.axis("off")
+
+    colors = ["#F44336", "#FF9800", "#FFC107", "#8BC34A", "#4CAF50"]
+    boundaries = [0, 20, 40, 60, 80, 100]
+
+    for i in range(5):
+        start_angle = 180 - (boundaries[i] / 100 * 180)
+        end_angle = 180 - (boundaries[i + 1] / 100 * 180)
+        theta1 = math.radians(end_angle)
+        theta2 = math.radians(start_angle)
+        n_pts = 30
+        angles = [theta1 + (theta2 - theta1) * j / n_pts for j in range(n_pts + 1)]
+        outer_x = [1.0 * math.cos(a) for a in angles]
+        outer_y = [1.0 * math.sin(a) for a in angles]
+        inner_x = [0.65 * math.cos(a) for a in reversed(angles)]
+        inner_y = [0.65 * math.sin(a) for a in reversed(angles)]
+        xs = outer_x + inner_x
+        ys = outer_y + inner_y
+        ax.fill(xs, ys, color=colors[i], alpha=0.8)
+
+    needle_angle = math.radians(180 - (score / 100 * 180))
+    nx = 0.9 * math.cos(needle_angle)
+    ny = 0.9 * math.sin(needle_angle)
+    ax.annotate("", xy=(nx, ny), xytext=(0, 0),
+                arrowprops=dict(arrowstyle="-|>", color="#333333", lw=2.5))
+    ax.add_patch(plt.Circle((0, 0), 0.08, color="#333333", zorder=5))
+
+    grade_colors = {"A": "#4CAF50", "B": "#8BC34A", "C": "#FFC107", "D": "#FF9800", "F": "#F44336"}
+    ax.text(0, 0.45, f"{score}", ha="center", va="center",
+            fontsize=36, fontweight="bold", color=grade_colors.get(grade, "#333"))
+    ax.text(0, 0.2, f"등급: {grade}", ha="center", va="center",
+            fontsize=16, fontweight="bold", color=grade_colors.get(grade, "#333"))
+
+    ax.text(-1.1, -0.15, "0", ha="center", fontsize=10, color="#999")
+    ax.text(1.1, -0.15, "100", ha="center", fontsize=10, color="#999")
+    ax.text(0, 1.15, "50", ha="center", fontsize=10, color="#999")
+
+
 def generate_stock_chart(
     data: dict,
     name_kr: str,
+    score_data: dict,
     output_dir: str,
 ) -> str | None:
-    """개별 종목 차트를 생성하고 파일 경로를 반환한다."""
     if not HAS_DEPS:
         return None
 
@@ -90,58 +257,62 @@ def generate_stock_chart(
 
     ticker = data["ticker"]
     hist = data["history"]
-    name_en = data["name"]
 
-    fig, axes = plt.subplots(2, 2, figsize=(14, 10))
-    fig.suptitle(f"{name_kr} ({ticker}) - 1개월 분석", fontsize=16, fontweight="bold")
+    fig = plt.figure(figsize=(14, 6))
+    gs = fig.add_gridspec(1, 3, width_ratios=[2, 1, 1], wspace=0.3)
 
-    # --- 1. 주가 차트 ---
-    ax1 = axes[0][0]
-    ax1.plot(hist.index, hist["Close"], color="#2196F3", linewidth=2)
-    ax1.fill_between(hist.index, hist["Close"], alpha=0.1, color="#2196F3")
-    ax1.set_title("주가 추이", fontsize=12)
-    ax1.set_ylabel(f"가격 ({data['currency']})")
-    ax1.grid(True, alpha=0.3)
-    ax1.xaxis.set_major_formatter(mdates.DateFormatter("%m/%d"))
+    fig.suptitle(f"{name_kr} ({ticker})", fontsize=18, fontweight="bold", y=1.02)
+
+    # --- 1. 주가 차트 (큰 패널) ---
+    ax1 = fig.add_subplot(gs[0, 0])
+
+    close_prices = hist["Close"]
+    dates = hist.index
 
     if len(hist) >= 2:
-        start_price = hist["Close"].iloc[0]
-        end_price = hist["Close"].iloc[-1]
-        change_pct = ((end_price - start_price) / start_price) * 100
-        color = "#4CAF50" if change_pct >= 0 else "#F44336"
-        ax1.annotate(
-            f"{change_pct:+.1f}%",
-            xy=(hist.index[-1], end_price),
-            fontsize=14, fontweight="bold", color=color,
-            xytext=(10, 10), textcoords="offset points",
-        )
+        start_p = close_prices.iloc[0]
+        end_p = close_prices.iloc[-1]
+        change = ((end_p - start_p) / start_p) * 100
+        line_color = "#4CAF50" if change >= 0 else "#F44336"
+        fill_color = "#E8F5E9" if change >= 0 else "#FFEBEE"
+    else:
+        line_color = "#2196F3"
+        fill_color = "#E3F2FD"
+        change = 0
 
-    # --- 2. 거래량 차트 ---
-    ax2 = axes[0][1]
-    colors = ["#4CAF50" if hist["Close"].iloc[i] >= hist["Open"].iloc[i] else "#F44336"
-              for i in range(len(hist))]
-    ax2.bar(hist.index, hist["Volume"], color=colors, alpha=0.7)
-    ax2.set_title("거래량", fontsize=12)
-    ax2.set_ylabel("거래량")
-    ax2.grid(True, alpha=0.3)
-    ax2.xaxis.set_major_formatter(mdates.DateFormatter("%m/%d"))
-    ax2.yaxis.set_major_formatter(mticker.FuncFormatter(lambda x, _: f"{x/1e6:.1f}M"))
+    ax1.plot(dates, close_prices, color=line_color, linewidth=2.5)
+    ax1.fill_between(dates, close_prices, alpha=0.3, color=fill_color)
 
-    # --- 3. 핵심 지표 테이블 ---
-    ax3 = axes[1][0]
-    ax3.axis("off")
+    if len(hist) >= 5:
+        ma5 = close_prices.rolling(5).mean()
+        ax1.plot(dates, ma5, color="#FF9800", linewidth=1, linestyle="--",
+                 alpha=0.7, label="5일 이평선")
+        ax1.legend(loc="upper left", fontsize=9)
+
+    ax1.set_ylabel(f"주가 ({data['currency']})", fontsize=11)
+    ax1.grid(True, alpha=0.2)
+    ax1.xaxis.set_major_formatter(mdates.DateFormatter("%m/%d"))
+    ax1.tick_params(axis="x", rotation=45)
+
+    change_str = f"{change:+.1f}%"
+    ax1.set_title(f"1개월 주가 추이  ({change_str})", fontsize=13,
+                  color=line_color, fontweight="bold")
+
+    price_min = close_prices.min()
+    price_max = close_prices.max()
+    margin = (price_max - price_min) * 0.1 or 1
+    ax1.set_ylim(price_min - margin, price_max + margin)
+
+    # --- 2. 핵심 지표 테이블 ---
+    ax2 = fig.add_subplot(gs[0, 1])
+    ax2.axis("off")
 
     market_cap = _format_large_number(data["market_cap"])
     pe = _format_ratio(data["pe_ratio"])
     pb = _format_ratio(data["pb_ratio"])
     price = f"${data['current_price']:.2f}" if data["current_price"] else "N/A"
-
-    if len(hist) >= 2:
-        high_1m = f"${hist['High'].max():.2f}"
-        low_1m = f"${hist['Low'].min():.2f}"
-        avg_vol = f"{hist['Volume'].mean()/1e6:.1f}M"
-    else:
-        high_1m = low_1m = avg_vol = "N/A"
+    high_1m = f"${hist['High'].max():.2f}" if len(hist) >= 1 else "N/A"
+    low_1m = f"${hist['Low'].min():.2f}" if len(hist) >= 1 else "N/A"
 
     table_data = [
         ["현재가", price],
@@ -150,46 +321,45 @@ def generate_stock_chart(
         ["PBR", pb],
         ["1개월 최고", high_1m],
         ["1개월 최저", low_1m],
-        ["평균 거래량", avg_vol],
-        ["섹터", data["sector"] or "N/A"],
     ]
 
-    table = ax3.table(
+    table = ax2.table(
         cellText=table_data,
         colLabels=["지표", "값"],
         cellLoc="center",
         loc="center",
-        colWidths=[0.4, 0.4],
+        colWidths=[0.45, 0.45],
     )
     table.auto_set_font_size(False)
     table.set_fontsize(11)
-    table.scale(1, 1.8)
+    table.scale(1, 2.0)
     for key, cell in table.get_celld().items():
         if key[0] == 0:
-            cell.set_facecolor("#1976D2")
+            cell.set_facecolor("#1565C0")
             cell.set_text_props(color="white", fontweight="bold")
         elif key[0] % 2 == 0:
             cell.set_facecolor("#E3F2FD")
+        else:
+            cell.set_facecolor("#FFFFFF")
         cell.set_edgecolor("#BBDEFB")
-    ax3.set_title("핵심 투자 지표", fontsize=12, pad=20)
 
-    # --- 4. 일간 수익률 분포 ---
-    ax4 = axes[1][1]
-    if len(hist) >= 2:
-        returns = hist["Close"].pct_change().dropna() * 100
-        color_hist = "#4CAF50" if returns.mean() >= 0 else "#F44336"
-        ax4.hist(returns, bins=15, color=color_hist, alpha=0.7, edgecolor="white")
-        ax4.axvline(x=0, color="black", linewidth=1, linestyle="--")
-        ax4.axvline(x=returns.mean(), color="#FF9800", linewidth=2, linestyle="-",
-                    label=f"평균: {returns.mean():.2f}%")
-        ax4.set_title("일간 수익률 분포", fontsize=12)
-        ax4.set_xlabel("수익률 (%)")
-        ax4.set_ylabel("빈도")
-        ax4.legend()
-    else:
-        ax4.text(0.5, 0.5, "데이터 부족", ha="center", va="center", fontsize=14)
-        ax4.set_title("일간 수익률 분포", fontsize=12)
-    ax4.grid(True, alpha=0.3)
+    ax2.set_title("핵심 지표", fontsize=13, fontweight="bold", pad=15)
+
+    # --- 3. 투자 스코어 게이지 ---
+    ax3 = fig.add_subplot(gs[0, 2])
+    _draw_score_gauge(ax3, score_data["total"], score_data["grade"])
+    ax3.set_title("투자 스코어", fontsize=13, fontweight="bold", pad=15)
+
+    # 스코어 상세 항목
+    detail_y = -0.22
+    for name, val in score_data["scores"].items():
+        bar_width = val / 25 * 0.8
+        ax3.barh(detail_y, bar_width, height=0.06, left=-0.4,
+                 color="#1565C0", alpha=0.6)
+        ax3.text(-0.45, detail_y, name, ha="right", va="center", fontsize=7)
+        ax3.text(-0.4 + bar_width + 0.03, detail_y, f"{val}/25",
+                 ha="left", va="center", fontsize=7, color="#666")
+        detail_y -= 0.10
 
     plt.tight_layout()
 
@@ -207,7 +377,6 @@ def generate_charts_for_tickers(
     ticker_names: dict[str, str],
     output_dir: str = "charts",
 ) -> list[dict]:
-    """여러 종목의 차트를 생성하고 결과를 반환한다."""
     if not HAS_DEPS:
         print("[WARN] yfinance 또는 matplotlib가 설치되어 있지 않습니다.", file=sys.stderr)
         return []
@@ -221,7 +390,8 @@ def generate_charts_for_tickers(
         if data is None:
             continue
 
-        chart_path = generate_stock_chart(data, name_kr, output_dir)
+        score_data = calculate_investment_score(data)
+        chart_path = generate_stock_chart(data, name_kr, score_data, output_dir)
         if chart_path:
             results.append({
                 "ticker": ticker,
@@ -231,6 +401,10 @@ def generate_charts_for_tickers(
                 "pe_ratio": _format_ratio(data["pe_ratio"]),
                 "pb_ratio": _format_ratio(data["pb_ratio"]),
                 "current_price": data["current_price"],
+                "score": score_data["total"],
+                "grade": score_data["grade"],
+                "score_details": score_data["details"],
+                "score_breakdown": score_data["scores"],
             })
 
     return results
@@ -241,4 +415,4 @@ if __name__ == "__main__":
     test_names = {"NVDA": "엔비디아", "AMD": "AMD", "TSLA": "테슬라"}
     results = generate_charts_for_tickers(test_tickers, test_names, "charts")
     for r in results:
-        print(f"{r['name']}: {r['chart_path']}")
+        print(f"{r['name']}: 스코어 {r['score']}/100 (등급 {r['grade']})")

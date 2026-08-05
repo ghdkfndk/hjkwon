@@ -612,24 +612,40 @@ def build_report(
         lines.append("감성 분석할 종목이 없습니다.")
         lines.append("")
 
-    # --- 종목 차트 ---
+    # --- 종목 차트 + 스코어 ---
     if chart_results:
         lines.append("---")
         lines.append("")
-        lines.append("## 📈 종목별 1개월 차트 & 핵심 지표")
+        lines.append("## 📈 종목별 투자 스코어 & 차트")
+        lines.append("")
+
+        grade_emoji = {"A": "🟢", "B": "🔵", "C": "🟡", "D": "🟠", "F": "🔴"}
+
+        lines.append("### 스코어 요약")
+        lines.append("")
+        lines.append("| 종목 | 티커 | 현재가 | 시총 | PER | PBR | 스코어 | 등급 |")
+        lines.append("|---|---|---|---|---|---|---|---|")
+        for cr in sorted(chart_results, key=lambda x: x.get("score", 0), reverse=True):
+            price_str = f"${cr['current_price']:.2f}" if cr.get("current_price") else "N/A"
+            emoji = grade_emoji.get(cr.get("grade", "C"), "⚪")
+            lines.append(
+                f"| {cr['name']} | {cr['ticker']} | {price_str} "
+                f"| {cr['market_cap']} | {cr['pe_ratio']} | {cr['pb_ratio']} "
+                f"| **{cr.get('score', 'N/A')}**/100 | {emoji} {cr.get('grade', '-')} |"
+            )
+        lines.append("")
+        lines.append("> 스코어 = 모멘텀(25) + 밸류에이션(25) + 안정성(25) + 52주 위치(25)")
+        lines.append("> 등급: A(80+) 🟢 | B(65+) 🔵 | C(50+) 🟡 | D(35+) 🟠 | F(<35) 🔴")
         lines.append("")
 
         for cr in chart_results:
-            lines.append(f"### {cr['name']} ({cr['ticker']})")
+            lines.append(f"### {cr['name']} ({cr['ticker']}) — {grade_emoji.get(cr.get('grade', 'C'), '')} 등급 {cr.get('grade', '-')} ({cr.get('score', 'N/A')}점)")
             lines.append("")
-            lines.append(f"| 지표 | 값 |")
-            lines.append(f"|---|---|")
-            if cr.get("current_price"):
-                lines.append(f"| 현재가 | ${cr['current_price']:.2f} |")
-            lines.append(f"| 시가총액 | {cr['market_cap']} |")
-            lines.append(f"| PER | {cr['pe_ratio']} |")
-            lines.append(f"| PBR | {cr['pb_ratio']} |")
-            lines.append("")
+
+            if cr.get("score_details"):
+                for detail in cr["score_details"]:
+                    lines.append(f"- {detail}")
+                lines.append("")
 
             if gh_repo and cr.get("chart_path"):
                 filename = os.path.basename(cr["chart_path"])
