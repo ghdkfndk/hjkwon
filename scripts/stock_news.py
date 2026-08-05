@@ -263,6 +263,130 @@ def extract_tickers(items: list[dict]) -> dict[str, list[str]]:
 
 
 # ---------------------------------------------------------------------------
+# 감성 분석
+# ---------------------------------------------------------------------------
+
+POSITIVE_WORDS_EN = {
+    "surge", "surges", "surged", "surging", "soar", "soars", "soared", "soaring",
+    "rally", "rallies", "rallied", "gain", "gains", "gained", "rise", "rises",
+    "rose", "rising", "jump", "jumps", "jumped", "record high", "all-time high",
+    "beat", "beats", "topped", "outperform", "upgrade", "upgrades", "upgraded",
+    "bullish", "boom", "booming", "growth", "strong", "robust", "optimism",
+    "positive", "profit", "profitable", "breakthrough", "accelerate", "upside",
+    "buy", "outperform", "overweight", "best", "boost", "boosted",
+    "fantastic", "magnificent", "brilliant", "better", "recover", "recovery",
+}
+NEGATIVE_WORDS_EN = {
+    "fall", "falls", "fell", "falling", "drop", "drops", "dropped", "dropping",
+    "decline", "declines", "declined", "declining", "plunge", "plunges", "plunged",
+    "crash", "crashes", "crashed", "crashing", "sink", "sinks", "sank", "sinking",
+    "loss", "losses", "lost", "losing", "sell", "selloff", "sell-off",
+    "bearish", "recession", "slowdown", "slowing", "weak", "weaker",
+    "downgrade", "downgrades", "downgraded", "underperform", "underweight",
+    "risk", "risky", "warning", "warns", "warned", "fear", "fears",
+    "concern", "concerns", "worried", "worries", "worst", "crisis",
+    "inflation", "debt", "layoff", "layoffs", "cut", "cuts", "slash",
+    "dump", "dumped", "crushed", "trouble", "pain", "struggling",
+}
+POSITIVE_WORDS_KR = {
+    "급등", "상승", "강세", "호실적", "최고치", "경신", "돌파", "호재",
+    "성장", "개선", "회복", "반등", "매수", "상향", "흑자", "호조",
+    "낙관", "긍정", "기대", "활황", "호황", "돌풍",
+}
+NEGATIVE_WORDS_KR = {
+    "급락", "하락", "약세", "부진", "폭락", "최저", "악재", "손실",
+    "감소", "둔화", "침체", "매도", "하향", "적자", "부정", "우려",
+    "위험", "위기", "불안", "리스크", "경고", "충격", "하방",
+}
+
+
+def analyze_sentiment(text: str) -> tuple[str, float]:
+    """텍스트의 감성을 분석하여 (판정, 점수)를 반환한다.
+    점수: -1.0(매우 부정) ~ +1.0(매우 긍정), 0 근처는 중립.
+    """
+    text_lower = text.lower()
+    words = set(re.findall(r"[a-z\-]+", text_lower))
+    kr_chars = text_lower
+
+    pos_count = len(words & POSITIVE_WORDS_EN)
+    neg_count = len(words & NEGATIVE_WORDS_EN)
+
+    for phrase in ("record high", "all-time high", "sell-off", "sell off"):
+        if phrase in text_lower:
+            if phrase in ("record high", "all-time high"):
+                pos_count += 1
+            else:
+                neg_count += 1
+
+    for w in POSITIVE_WORDS_KR:
+        if w in kr_chars:
+            pos_count += 1
+    for w in NEGATIVE_WORDS_KR:
+        if w in kr_chars:
+            neg_count += 1
+
+    total = pos_count + neg_count
+    if total == 0:
+        return "중립 ⚪", 0.0
+
+    score = (pos_count - neg_count) / total
+    if score > 0.2:
+        return "긍정 🟢", round(score, 2)
+    elif score < -0.2:
+        return "부정 🔴", round(score, 2)
+    else:
+        return "중립 ⚪", round(score, 2)
+
+
+def build_sentiment_table(
+    ticker_headlines: dict[str, list[str]],
+    all_items: list[dict],
+) -> list[dict]:
+    """종목별 감성 분석 결과 테이블 데이터를 생성한다."""
+    results = []
+
+    item_map: dict[str, dict] = {}
+    for item in all_items:
+        item_map[item["title"]] = item
+
+    for ticker, headlines in sorted(ticker_headlines.items()):
+        name = STOCK_TICKERS.get(ticker, ticker)
+        sentiments = []
+        for headline in headlines:
+            item = item_map.get(headline, {})
+            full_text = f"{headline} {item.get('description', '')}"
+            sentiment, score = analyze_sentiment(full_text)
+            sentiments.append({
+                "ticker": ticker,
+                "name": name,
+                "headline": headline,
+                "sentiment": sentiment,
+                "score": score,
+            })
+
+        if sentiments:
+            avg_score = sum(s["score"] for s in sentiments) / len(sentiments)
+            if avg_score > 0.2:
+                overall = "긍정 🟢"
+            elif avg_score < -0.2:
+                overall = "부정 🔴"
+            else:
+                overall = "중립 ⚪"
+
+            results.append({
+                "ticker": ticker,
+                "name": name,
+                "news_count": len(sentiments),
+                "overall": overall,
+                "avg_score": round(avg_score, 2),
+                "details": sentiments,
+            })
+
+    results.sort(key=lambda x: x["news_count"], reverse=True)
+    return results
+
+
+# ---------------------------------------------------------------------------
 # 2단계: Motley Fool 분석 조회
 # ---------------------------------------------------------------------------
 
@@ -379,6 +503,7 @@ def match_fool_to_tickers(
 def build_report(
     news_items: list[dict],
     ticker_headlines: dict[str, list[str]],
+    sentiment_data: list[dict],
     fool_analysis: dict[str, list[dict]],
     fool_general: list[dict],
 ) -> str:
@@ -447,6 +572,42 @@ def build_report(
         lines.append("")
     else:
         lines.append("언급된 종목이 없습니다.")
+        lines.append("")
+
+    # --- 감성 분석 ---
+    lines.append("---")
+    lines.append("")
+    lines.append("## 📊 종목별 뉴스 감성 분석")
+    lines.append("")
+
+    if sentiment_data:
+        lines.append("| 종목 | 티커 | 뉴스 수 | 감성 판정 | 점수 |")
+        lines.append("|---|---|---|---|---|")
+        for s in sentiment_data:
+            lines.append(
+                f"| {s['name']} | {s['ticker']} | {s['news_count']}건 "
+                f"| {s['overall']} | {s['avg_score']:+.2f} |"
+            )
+        lines.append("")
+        lines.append("> 점수 범위: -1.00(매우 부정) ~ +1.00(매우 긍정)")
+        lines.append("")
+
+        lines.append("<details>")
+        lines.append("<summary>📋 뉴스별 상세 감성 분석 (클릭하여 펼치기)</summary>")
+        lines.append("")
+        for s in sentiment_data:
+            lines.append(f"**{s['name']} ({s['ticker']})**")
+            lines.append("")
+            lines.append("| 뉴스 제목 | 감성 |")
+            lines.append("|---|---|")
+            for d in s["details"]:
+                title_short = d["headline"][:60] + "..." if len(d["headline"]) > 60 else d["headline"]
+                lines.append(f"| {title_short} | {d['sentiment']} |")
+            lines.append("")
+        lines.append("</details>")
+        lines.append("")
+    else:
+        lines.append("감성 분석할 종목이 없습니다.")
         lines.append("")
 
     # --- 2단계: Motley Fool 분석 ---
@@ -549,6 +710,12 @@ def main() -> None:
     tickers_found = set(ticker_headlines.keys())
     print(f"[INFO] 언급 종목 {len(tickers_found)}개: {', '.join(sorted(tickers_found))}")
 
+    # --- 감성 분석 ---
+    print("\n[감성분석] 종목별 뉴스 감성 분석 중...")
+    sentiment_data = build_sentiment_table(ticker_headlines, filtered)
+    for s in sentiment_data:
+        print(f"[INFO] {s['name']}({s['ticker']}): {s['overall']} (점수: {s['avg_score']:+.2f})")
+
     # --- 번역 ---
     print("\n[번역] 영어 기사 한국어 번역 중...")
     filtered = [translate_item(item) for item in filtered]
@@ -586,7 +753,7 @@ def main() -> None:
 
     # --- 리포트 ---
     print("\n[리포트] 생성 중...")
-    report = build_report(filtered, ticker_headlines, fool_matched, fool_general)
+    report = build_report(filtered, ticker_headlines, sentiment_data, fool_matched, fool_general)
 
     print("\n" + report + "\n")
 
