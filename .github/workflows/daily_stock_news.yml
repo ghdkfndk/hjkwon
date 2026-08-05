@@ -1,0 +1,28 @@
+name: 📊 일일 증시 뉴스 요약
+
+on:
+  schedule:
+    # 매일 10:00 KST = 01:00 UTC
+    - cron: "0 1 * * *"
+  workflow_dispatch: # 수동 실행도 가능
+
+permissions:
+  issues: write
+
+jobs:
+  stock-news:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run stock news script
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: python scripts/stock_news.py
