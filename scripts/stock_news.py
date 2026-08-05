@@ -1081,13 +1081,102 @@ def main() -> None:
 
     now = datetime.now(KST)
     issue_title = f"📊 일일 증시 분석 리포트 - {now.strftime('%Y-%m-%d')}"
-    create_github_issue(issue_title, report)
 
-    # --- 이메일 발송 ---
-    email_charts = [cr["chart_path"] for cr in chart_results if cr.get("chart_path")]
-    send_email(issue_title, report, email_charts)
+    summary_mode = "--summary" in sys.argv
+
+    if summary_mode:
+        # 요약 모드: 결론+요약만 이메일 발송 (Issue 생성 안 함)
+        summary = build_summary_email(
+            sentiment_data, chart_results, now,
+        )
+        summary_title = f"📊 오늘의 증시 요약 - {now.strftime('%Y-%m-%d %H:%M')}"
+        email_charts = [cr["chart_path"] for cr in chart_results if cr.get("chart_path")]
+        send_email(summary_title, summary, email_charts)
+        print("\n" + summary)
+    else:
+        # 전체 모드: Issue + 이메일
+        create_github_issue(issue_title, report)
+        email_charts = [cr["chart_path"] for cr in chart_results if cr.get("chart_path")]
+        send_email(issue_title, report, email_charts)
 
     print("[INFO] 완료!")
+
+
+def build_summary_email(
+    sentiment_data: list[dict],
+    chart_results: list[dict],
+    now: datetime,
+) -> str:
+    """결론과 요약만 담은 간결한 이메일 본문을 생성한다."""
+    date_str = now.strftime("%Y년 %m월 %d일 %H:%M KST")
+    grade_emoji = {"A": "🟢", "B": "🔵", "C": "🟡", "D": "🟠", "F": "🔴"}
+
+    lines = [
+        "# 📊 오늘의 증시 요약",
+        "",
+        f"> {date_str}",
+        "",
+    ]
+
+    # --- 결론 ---
+    if chart_results:
+        sorted_by_score = sorted(chart_results, key=lambda x: x.get("score", 0), reverse=True)
+
+        lines.append("## 🏆 결론")
+        lines.append("")
+        lines.append("| 종목 | 스코어 | 등급 | 핵심 근거 |")
+        lines.append("|---|---|---|---|")
+        for cr in sorted_by_score:
+            emoji = grade_emoji.get(cr.get("grade", "C"), "⚪")
+            details = cr.get("score_details", [])
+            reason = " / ".join(details[:2]) if details else "-"
+            lines.append(
+                f"| **{cr['name']}** ({cr['ticker']}) "
+                f"| **{cr.get('score', '-')}**/100 "
+                f"| {emoji} {cr.get('grade', '-')} "
+                f"| {reason} |"
+            )
+        lines.append("")
+
+        best = sorted_by_score[0]
+        worst = sorted_by_score[-1]
+        lines.append(f"> {grade_emoji.get(best.get('grade'), '⚪')} **가장 유망**: "
+                      f"{best['name']}({best['ticker']}) — {best.get('score', '-')}점")
+        if len(sorted_by_score) > 1:
+            lines.append(f"> {grade_emoji.get(worst.get('grade'), '⚪')} **가장 주의**: "
+                          f"{worst['name']}({worst['ticker']}) — {worst.get('score', '-')}점")
+        lines.append("")
+
+    # --- 감성 요약 ---
+    if sentiment_data:
+        lines.append("## 📰 뉴스 감성")
+        lines.append("")
+        for s in sentiment_data:
+            lines.append(f"- **{s['name']}**({s['ticker']}): {s['overall']}")
+        lines.append("")
+
+    # --- 핵심 지표 ---
+    if chart_results:
+        lines.append("## 📊 핵심 지표")
+        lines.append("")
+        lines.append("| 종목 | 현재가 | PER | PBR | 1개월 수익률 |")
+        lines.append("|---|---|---|---|---|")
+        for cr in sorted(chart_results, key=lambda x: x.get("score", 0), reverse=True):
+            price_str = f"${cr['current_price']:.2f}" if cr.get("current_price") else "N/A"
+            details = cr.get("score_details", [])
+            monthly = next((d for d in details if "수익률" in d), "-")
+            lines.append(
+                f"| {cr['name']} | {price_str} "
+                f"| {cr['pe_ratio']} | {cr['pb_ratio']} "
+                f"| {monthly} |"
+            )
+        lines.append("")
+
+    lines.append("---")
+    lines.append("")
+    lines.append("*10시에 상세 리포트가 GitHub Issue로 게시됩니다.*")
+
+    return "\n".join(lines)
 
 
 if __name__ == "__main__":
