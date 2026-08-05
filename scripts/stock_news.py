@@ -990,7 +990,14 @@ def main() -> None:
 
     ticker_headlines = extract_tickers(filtered)
     tickers_found = set(ticker_headlines.keys())
-    print(f"[INFO] 언급 종목 {len(tickers_found)}개: {', '.join(sorted(tickers_found))}")
+    print(f"[INFO] 뉴스 언급 종목 {len(tickers_found)}개: {', '.join(sorted(tickers_found))}")
+
+    DEFAULT_TICKERS = {"NVDA", "AAPL", "MSFT", "GOOGL", "AMZN", "META", "TSLA", "AMD", "PLTR", "AVGO"}
+    added = DEFAULT_TICKERS - tickers_found
+    tickers_found = tickers_found | DEFAULT_TICKERS
+    if added:
+        print(f"[INFO] 기본 추적 종목 {len(added)}개 추가: {', '.join(sorted(added))}")
+    print(f"[INFO] 총 분석 대상: {len(tickers_found)}개")
 
     # --- 감성 분석 ---
     print("\n[감성분석] 종목별 뉴스 감성 분석 중...")
@@ -1174,7 +1181,12 @@ def build_summary_email(
 
     lines.append("---")
     lines.append("")
-    lines.append("*10시에 상세 리포트가 GitHub Issue로 게시됩니다.*")
+    gh_repo = os.environ.get("GH_REPO", "")
+    if gh_repo:
+        issues_url = f"https://github.com/{gh_repo}/issues"
+    else:
+        issues_url = "https://github.com/ghdkfndk/hjkwon/issues"
+    lines.append(f"📎 [상세 리포트 보기 (GitHub)]({issues_url}) — 10시에 전체 분석이 게시됩니다.")
 
     return "\n".join(lines)
 
