@@ -55,6 +55,12 @@ def fetch_stock_data(ticker: str, period: str = "1mo") -> dict | None:
             "52w_low": info.get("fiftyTwoWeekLow"),
             "dividend_yield": info.get("dividendYield"),
             "beta": info.get("beta"),
+            "revenue_growth": info.get("revenueGrowth"),
+            "earnings_growth": info.get("earningsGrowth"),
+            "forward_pe": info.get("forwardPE"),
+            "peg_ratio": info.get("pegRatio"),
+            "profit_margin": info.get("profitMargins"),
+            "industry": info.get("industry", ""),
         }
     except Exception as exc:
         print(f"[WARN] {ticker} 데이터 가져오기 실패: {exc}", file=sys.stderr)
@@ -82,6 +88,82 @@ def _format_ratio(val: float | None) -> str:
 # ---------------------------------------------------------------------------
 # 투자 스코어 계산
 # ---------------------------------------------------------------------------
+
+def _pe_base_score(pe: float) -> int:
+    if pe < 0:
+        return 0
+    elif pe < 15:
+        return 25
+    elif pe < 25:
+        return 20
+    elif pe < 40:
+        return 15
+    elif pe < 80:
+        return 10
+    else:
+        return 5
+
+
+def _analyze_valuation_context(
+    pe: float | None,
+    rev_growth: float | None,
+    earn_growth: float | None,
+    peg: float | None,
+    forward_pe: float | None,
+) -> str:
+    """PER과 성장률을 종합하여 한 줄 평가를 생성한다."""
+    if pe is None:
+        return "PER: N/A"
+
+    parts = []
+
+    if pe < 0:
+        return f"PER: {pe:.1f} (적자 — 수익성 확보 필요)"
+    elif pe < 15:
+        label = "저평가"
+    elif pe < 25:
+        label = "적정"
+    elif pe < 40:
+        label = "고평가"
+    else:
+        label = "매우 고평가"
+
+    parts.append(f"PER {pe:.1f}")
+
+    if pe > 25 and rev_growth is not None and rev_growth > 0.2:
+        growth_pct = rev_growth * 100
+        if rev_growth > 0.5:
+            parts.append(f"매출 +{growth_pct:.0f}% 고성장으로 프리미엄 정당화 가능")
+            label = "고평가(성장 반영)"
+        elif rev_growth > 0.3:
+            parts.append(f"매출 +{growth_pct:.0f}% 성장 중 — 일부 프리미엄 합리적")
+            label = "고평가(성장 반영)"
+        else:
+            parts.append(f"매출 +{growth_pct:.0f}% 성장 중")
+    elif pe > 40 and (rev_growth is None or rev_growth < 0.1):
+        parts.append("성장률 대비 높은 밸류에이션 주의")
+
+    if peg is not None:
+        if 0 < peg < 1:
+            parts.append(f"PEG {peg:.2f} — 성장 대비 저평가")
+        elif peg < 1.5:
+            parts.append(f"PEG {peg:.2f} — 성장 대비 적정")
+        elif peg < 3:
+            parts.append(f"PEG {peg:.2f} — 성장 대비 고평가")
+        elif peg > 3:
+            parts.append(f"PEG {peg:.2f} — 성장 대비 과열")
+
+    if forward_pe is not None and pe > 30:
+        if forward_pe < pe * 0.7:
+            parts.append(f"예상 PER {forward_pe:.1f} — 이익 개선 기대")
+        elif forward_pe < pe * 0.9:
+            parts.append(f"예상 PER {forward_pe:.1f}")
+
+    if earn_growth is not None and earn_growth > 0.3:
+        parts.append(f"이익 +{earn_growth*100:.0f}% 성장")
+
+    return f"{label}: " + " / ".join(parts)
+
 
 def calculate_investment_score(data: dict) -> dict:
     """다양한 지표를 종합하여 0~100 투자 스코어를 산출한다."""
@@ -112,27 +194,30 @@ def calculate_investment_score(data: dict) -> dict:
     scores["모멘텀"] = momentum
     details.append(f"1개월 수익률: {monthly_return:+.1f}%")
 
-    # 2. 밸류에이션 점수 (PER 기반, 25점)
+    # 2. 밸류에이션 점수 (PER + 성장률 종합, 25점)
     pe = data.get("pe_ratio")
+    rev_growth = data.get("revenue_growth")
+    earn_growth = data.get("earnings_growth")
+    peg = data.get("peg_ratio")
+    forward_pe = data.get("forward_pe")
+
+    growth_context = _analyze_valuation_context(pe, rev_growth, earn_growth, peg, forward_pe)
+
     if pe is not None:
-        if pe < 0:
-            valuation = 0
-            details.append(f"PER: {pe:.1f} (적자)")
-        elif pe < 15:
-            valuation = 25
-            details.append(f"PER: {pe:.1f} (저평가)")
-        elif pe < 25:
-            valuation = 20
-            details.append(f"PER: {pe:.1f} (적정)")
-        elif pe < 40:
-            valuation = 15
-            details.append(f"PER: {pe:.1f} (고평가)")
-        elif pe < 80:
-            valuation = 10
-            details.append(f"PER: {pe:.1f} (고평가)")
-        else:
-            valuation = 5
-            details.append(f"PER: {pe:.1f} (매우 고평가)")
+        base_val = _pe_base_score(pe)
+
+        growth_bonus = 0
+        if rev_growth is not None and rev_growth > 0.3:
+            growth_bonus += 5
+        if earn_growth is not None and earn_growth > 0.2:
+            growth_bonus += 3
+        if peg is not None and 0 < peg < 1.5:
+            growth_bonus += 4
+        if forward_pe is not None and pe > 40 and forward_pe < pe * 0.7:
+            growth_bonus += 3
+
+        valuation = min(25, base_val + growth_bonus)
+        details.append(growth_context)
     else:
         valuation = 12
         details.append("PER: N/A")
@@ -431,6 +516,10 @@ def generate_charts_for_tickers(
                 "grade": score_data["grade"],
                 "score_details": score_data["details"],
                 "score_breakdown": score_data["scores"],
+                "revenue_growth": data.get("revenue_growth"),
+                "earnings_growth": data.get("earnings_growth"),
+                "peg_ratio": data.get("peg_ratio"),
+                "forward_pe": data.get("forward_pe"),
             })
 
     return results
