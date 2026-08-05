@@ -20,10 +20,12 @@ import os
 import re
 import subprocess
 import sys
+import time
 from datetime import datetime, timezone, timedelta
 from html.parser import HTMLParser
 from urllib.request import urlopen, Request
 from urllib.error import URLError, HTTPError
+from urllib.parse import quote
 from xml.etree import ElementTree
 
 KST = timezone(timedelta(hours=9))
@@ -114,6 +116,62 @@ def clean_html(text: str) -> str:
 
 
 # ---------------------------------------------------------------------------
+# 번역
+# ---------------------------------------------------------------------------
+
+_translate_cache: dict[str, str] = {}
+
+
+def is_korean(text: str) -> bool:
+    """텍스트에 한글이 포함되어 있는지 확인."""
+    return bool(re.search(r"[가-힣]", text))
+
+
+def translate_to_korean(text: str) -> str:
+    """Google Translate 무료 엔드포인트로 영어→한국어 번역."""
+    if is_korean(text):
+        return text
+    if text in _translate_cache:
+        return _translate_cache[text]
+
+    try:
+        encoded = quote(text)
+        url = (
+            "https://translate.googleapis.com/translate_a/single"
+            f"?client=gtx&sl=en&tl=ko&dt=t&q={encoded}"
+        )
+        req = Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read())
+            translated = "".join(part[0] for part in data[0] if part[0])
+            _translate_cache[text] = translated
+            time.sleep(0.3)
+            return translated
+    except Exception as exc:
+        print(f"[WARN] 번역 실패: {exc}", file=sys.stderr)
+        return text
+
+
+def translate_item(item: dict) -> dict:
+    """뉴스 항목의 제목과 설명을 한국어로 번역."""
+    translated = dict(item)
+    if not is_korean(item["title"]):
+        kr_title = translate_to_korean(item["title"])
+        translated["title_kr"] = kr_title
+        translated["title_original"] = item["title"]
+    else:
+        translated["title_kr"] = item["title"]
+        translated["title_original"] = item["title"]
+
+    if item.get("description") and not is_korean(item["description"]):
+        translated["description_kr"] = translate_to_korean(item["description"][:300])
+    else:
+        translated["description_kr"] = item.get("description", "")
+
+    return translated
+
+
+# ---------------------------------------------------------------------------
 # 1단계: 뉴스 수집
 # ---------------------------------------------------------------------------
 
@@ -145,6 +203,7 @@ def fetch_rss(url: str, limit: int = 10) -> list[dict]:
 def collect_news() -> list[dict]:
     feeds = [
         ("연합뉴스 경제", "https://www.yonhapnewstv.co.kr/category/news/economy/feed/"),
+        ("매일경제", "https://www.mk.co.kr/rss/30100041/"),
         ("MarketWatch", "https://feeds.content.dowjones.io/public/rss/mw_topstories"),
         ("CNBC Economy", "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=20910258"),
         ("Yahoo Finance", "https://finance.yahoo.com/news/rssindex"),
@@ -340,19 +399,22 @@ def build_report(
     seen_titles: set[str] = set()
     count = 0
     for item in news_items:
-        title = item["title"]
-        if title in seen_titles:
+        title_kr = item.get("title_kr", item["title"])
+        title_original = item.get("title_original", item["title"])
+        if title_original in seen_titles:
             continue
-        seen_titles.add(title)
+        seen_titles.add(title_original)
         count += 1
 
         source = item.get("source", "")
         link = item.get("link", "")
-        desc = item.get("description", "")
-        if len(desc) > 200:
-            desc = desc[:200] + "..."
+        desc = item.get("description_kr", item.get("description", ""))
+        if len(desc) > 250:
+            desc = desc[:250] + "..."
 
-        lines.append(f"**{count}.** {title}")
+        lines.append(f"**{count}.** {title_kr}")
+        if title_kr != title_original:
+            lines.append(f"  - *원문: {title_original}*")
         parts = []
         if source:
             parts.append(f"출처: {source}")
@@ -399,7 +461,10 @@ def build_report(
             lines.append(f"### {name} ({ticker})")
             lines.append("")
             for art in articles[:3]:
-                lines.append(f"- [{art['title']}]({art['link']})")
+                title_kr = art.get("title_kr", art["title"])
+                lines.append(f"- [{title_kr}]({art['link']})")
+                if title_kr != art["title"]:
+                    lines.append(f"  - *원문: {art['title']}*")
             lines.append("")
     else:
         lines.append("해당 종목에 대한 Motley Fool 분석이 없습니다.")
@@ -412,7 +477,10 @@ def build_report(
         lines.append("## 📋 Motley Fool 오늘의 추천 기사")
         lines.append("")
         for art in fool_general[:8]:
-            lines.append(f"- [{art['title']}]({art['link']})")
+            title_kr = art.get("title_kr", art["title"])
+            lines.append(f"- [{title_kr}]({art['link']})")
+            if title_kr != art["title"]:
+                lines.append(f"  - *원문: {art['title']}*")
         lines.append("")
 
     lines.append("---")
@@ -481,6 +549,12 @@ def main() -> None:
     tickers_found = set(ticker_headlines.keys())
     print(f"[INFO] 언급 종목 {len(tickers_found)}개: {', '.join(sorted(tickers_found))}")
 
+    # --- 번역 ---
+    print("\n[번역] 영어 기사 한국어 번역 중...")
+    filtered = [translate_item(item) for item in filtered]
+    en_count = sum(1 for item in filtered if item.get("title_kr") != item.get("title_original"))
+    print(f"[INFO] {en_count}건 번역 완료")
+
     # --- 2단계 ---
     print("\n[2단계] Motley Fool 분석 조회 중...")
 
@@ -498,6 +572,17 @@ def main() -> None:
 
     matched_count = sum(len(v) for v in fool_matched.values())
     print(f"[INFO] Fool 매칭 완료: {len(fool_matched)}개 종목, 총 {matched_count}건")
+
+    # Fool 기사 번역
+    print("\n[번역] Motley Fool 기사 번역 중...")
+    for ticker, articles in fool_matched.items():
+        for art in articles:
+            kr = translate_to_korean(art["title"])
+            art["title_kr"] = kr
+    for art in fool_general:
+        kr = translate_to_korean(art["title"])
+        art["title_kr"] = kr
+    print("[INFO] Fool 기사 번역 완료")
 
     # --- 리포트 ---
     print("\n[리포트] 생성 중...")
