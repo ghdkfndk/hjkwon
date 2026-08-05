@@ -308,17 +308,43 @@ def generate_stock_chart(
     ax2.axis("off")
 
     market_cap = _format_large_number(data["market_cap"])
-    pe = _format_ratio(data["pe_ratio"])
-    pb = _format_ratio(data["pb_ratio"])
     price = f"${data['current_price']:.2f}" if data["current_price"] else "N/A"
     high_1m = f"${hist['High'].max():.2f}" if len(hist) >= 1 else "N/A"
     low_1m = f"${hist['Low'].min():.2f}" if len(hist) >= 1 else "N/A"
 
+    pe = data.get("pe_ratio")
+    if pe is not None:
+        if pe < 0:
+            pe_str = f"{pe:.1f} (적자)"
+        elif pe < 15:
+            pe_str = f"{pe:.1f} (저평가)"
+        elif pe < 25:
+            pe_str = f"{pe:.1f} (적정)"
+        elif pe < 40:
+            pe_str = f"{pe:.1f} (고평가)"
+        else:
+            pe_str = f"{pe:.1f} (매우 고평가)"
+    else:
+        pe_str = "N/A"
+
+    pb = data.get("pb_ratio")
+    if pb is not None:
+        if pb < 1:
+            pb_str = f"{pb:.2f} (저평가)"
+        elif pb < 3:
+            pb_str = f"{pb:.2f} (적정)"
+        elif pb < 10:
+            pb_str = f"{pb:.2f} (고평가)"
+        else:
+            pb_str = f"{pb:.2f} (매우 고평가)"
+    else:
+        pb_str = "N/A"
+
     table_data = [
         ["현재가", price],
         ["시가총액", market_cap],
-        ["PER", pe],
-        ["PBR", pb],
+        ["PER", pe_str],
+        ["PBR", pb_str],
         ["1개월 최고", high_1m],
         ["1개월 최저", low_1m],
     ]

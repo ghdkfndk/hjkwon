@@ -623,19 +623,74 @@ def build_report(
 
         lines.append("### 스코어 요약")
         lines.append("")
-        lines.append("| 종목 | 티커 | 현재가 | 시총 | PER | PBR | 스코어 | 등급 |")
-        lines.append("|---|---|---|---|---|---|---|---|")
+        lines.append("| 종목 | 현재가 | 시총 | PER | PBR | 스코어 | 등급 |")
+        lines.append("|---|---|---|---|---|---|---|")
         for cr in sorted(chart_results, key=lambda x: x.get("score", 0), reverse=True):
             price_str = f"${cr['current_price']:.2f}" if cr.get("current_price") else "N/A"
             emoji = grade_emoji.get(cr.get("grade", "C"), "⚪")
+
+            pe_val = cr.get("pe_ratio", "N/A")
+            if pe_val != "N/A":
+                pe_f = float(pe_val)
+                if pe_f < 0:
+                    pe_label = f"{pe_val} (적자)"
+                elif pe_f < 15:
+                    pe_label = f"{pe_val} (저평가)"
+                elif pe_f < 25:
+                    pe_label = f"{pe_val} (적정)"
+                elif pe_f < 40:
+                    pe_label = f"{pe_val} (고평가)"
+                else:
+                    pe_label = f"{pe_val} (매우 고평가)"
+            else:
+                pe_label = "N/A"
+
+            pb_val = cr.get("pb_ratio", "N/A")
+            if pb_val != "N/A":
+                pb_f = float(pb_val)
+                if pb_f < 1:
+                    pb_label = f"{pb_val} (저평가)"
+                elif pb_f < 3:
+                    pb_label = f"{pb_val} (적정)"
+                elif pb_f < 10:
+                    pb_label = f"{pb_val} (고평가)"
+                else:
+                    pb_label = f"{pb_val} (매우 고평가)"
+            else:
+                pb_label = "N/A"
+
             lines.append(
-                f"| {cr['name']} | {cr['ticker']} | {price_str} "
-                f"| {cr['market_cap']} | {cr['pe_ratio']} | {cr['pb_ratio']} "
+                f"| {cr['name']} ({cr['ticker']}) | {price_str} "
+                f"| {cr['market_cap']} | {pe_label} | {pb_label} "
                 f"| **{cr.get('score', 'N/A')}**/100 | {emoji} {cr.get('grade', '-')} |"
             )
         lines.append("")
         lines.append("> 스코어 = 모멘텀(25) + 밸류에이션(25) + 안정성(25) + 52주 위치(25)")
         lines.append("> 등급: A(80+) 🟢 | B(65+) 🔵 | C(50+) 🟡 | D(35+) 🟠 | F(<35) 🔴")
+        lines.append("")
+        lines.append("<details>")
+        lines.append("<summary>📖 PER·PBR 보는 법 (클릭하여 펼치기)</summary>")
+        lines.append("")
+        lines.append("**PER (주가수익비율)** = 주가 ÷ 주당순이익(EPS)")
+        lines.append("- 이 회사의 1년 이익 대비 주가가 몇 배인지를 보는 지표")
+        lines.append("- PER 15 = \"이 회사가 현재 속도로 15년 벌면 시가총액만큼 번다\"는 의미")
+        lines.append("- **낮을수록** 이익 대비 주가가 저렴 (단, 업종별 평균이 다름)")
+        lines.append("- 일반적 기준: ~15 저평가 | 15~25 적정 | 25~40 고평가 | 40+ 매우 고평가")
+        lines.append("- 적자 기업은 PER이 마이너스(-)이므로 의미 없음")
+        lines.append("")
+        lines.append("**PBR (주가순자산비율)** = 주가 ÷ 주당순자산(BPS)")
+        lines.append("- 회사의 순자산(자산-부채) 대비 주가가 몇 배인지를 보는 지표")
+        lines.append("- PBR 1 = \"회사를 청산하면 투자금만큼 돌려받을 수 있다\"는 의미")
+        lines.append("- **1 미만**이면 자산가치보다 싸게 거래 중 (저평가 가능성)")
+        lines.append("- 기술주는 PBR이 높은 게 보통 (무형자산·성장성 반영)")
+        lines.append("- 일반적 기준: ~1 저평가 | 1~3 적정 | 3~10 고평가 | 10+ 매우 고평가")
+        lines.append("")
+        lines.append("**스코어에서 활용하는 방법**")
+        lines.append("- PER이 적정 범위(15~25)에 있으면 밸류에이션 점수 높음")
+        lines.append("- PER이 너무 높으면(80+) 과열 신호로 점수 낮음")
+        lines.append("- PBR은 핵심 지표 테이블에서 참고용으로 제공")
+        lines.append("")
+        lines.append("</details>")
         lines.append("")
 
         for cr in chart_results:
