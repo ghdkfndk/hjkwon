@@ -162,7 +162,7 @@ def _analyze_valuation_context(
     if earn_growth is not None and earn_growth > 0.3:
         parts.append(f"이익 +{earn_growth*100:.0f}% 성장")
 
-    return f"{label}: " + " / ".join(parts)
+    return f"{label}: " + "\n  - ".join(parts)
 
 
 def calculate_investment_score(data: dict) -> dict:

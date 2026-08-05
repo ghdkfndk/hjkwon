@@ -526,19 +526,6 @@ def build_report(
 
         lines.append("## 🏆 오늘의 결론")
         lines.append("")
-        lines.append("| 종목 | 스코어 | 등급 | 핵심 근거 |")
-        lines.append("|---|---|---|---|")
-        for cr in sorted_by_score:
-            emoji = grade_emoji.get(cr.get("grade", "C"), "⚪")
-            details = cr.get("score_details", [])
-            reason = " / ".join(details[:2]) if details else "-"
-            lines.append(
-                f"| **{cr['name']}** ({cr['ticker']}) "
-                f"| **{cr.get('score', '-')}**/100 "
-                f"| {emoji} {cr.get('grade', '-')} "
-                f"| {reason} |"
-            )
-        lines.append("")
 
         best = sorted_by_score[0]
         worst = sorted_by_score[-1]
@@ -554,6 +541,17 @@ def build_report(
                 f"— 스코어 {worst.get('score', '-')}점"
             )
         lines.append("")
+
+        for cr in sorted_by_score:
+            emoji = grade_emoji.get(cr.get("grade", "C"), "⚪")
+            lines.append(f"**{emoji} {cr['name']}** ({cr['ticker']}) — **{cr.get('score', '-')}점** 등급 {cr.get('grade', '-')}")
+            details = cr.get("score_details", [])
+            for detail in details:
+                for sub in detail.split("\n"):
+                    sub = sub.strip().lstrip("- ").strip()
+                    if sub:
+                        lines.append(f"- {sub}")
+            lines.append("")
 
     # --- 감성 분석 요약도 상단에 ---
     if sentiment_data:
@@ -746,7 +744,10 @@ def build_report(
 
             if cr.get("score_details"):
                 for detail in cr["score_details"]:
-                    lines.append(f"- {detail}")
+                    for sub in detail.split("\n"):
+                        sub = sub.strip().lstrip("- ").strip()
+                        if sub:
+                            lines.append(f"- {sub}")
                 lines.append("")
 
             if gh_repo and cr.get("chart_path"):
@@ -1131,19 +1132,6 @@ def build_summary_email(
 
         lines.append("## 🏆 결론")
         lines.append("")
-        lines.append("| 종목 | 스코어 | 등급 | 핵심 근거 |")
-        lines.append("|---|---|---|---|")
-        for cr in sorted_by_score:
-            emoji = grade_emoji.get(cr.get("grade", "C"), "⚪")
-            details = cr.get("score_details", [])
-            reason = " / ".join(details[:2]) if details else "-"
-            lines.append(
-                f"| **{cr['name']}** ({cr['ticker']}) "
-                f"| **{cr.get('score', '-')}**/100 "
-                f"| {emoji} {cr.get('grade', '-')} "
-                f"| {reason} |"
-            )
-        lines.append("")
 
         best = sorted_by_score[0]
         worst = sorted_by_score[-1]
@@ -1153,6 +1141,17 @@ def build_summary_email(
             lines.append(f"> {grade_emoji.get(worst.get('grade'), '⚪')} **가장 주의**: "
                           f"{worst['name']}({worst['ticker']}) — {worst.get('score', '-')}점")
         lines.append("")
+
+        for cr in sorted_by_score:
+            emoji = grade_emoji.get(cr.get("grade", "C"), "⚪")
+            lines.append(f"**{emoji} {cr['name']}** ({cr['ticker']}) — **{cr.get('score', '-')}점** 등급 {cr.get('grade', '-')}")
+            details = cr.get("score_details", [])
+            for detail in details:
+                for sub in detail.split("\n"):
+                    sub = sub.strip().lstrip("- ").strip()
+                    if sub:
+                        lines.append(f"- {sub}")
+            lines.append("")
 
     # --- 감성 요약 ---
     if sentiment_data:
