@@ -2,8 +2,8 @@ name: 📊 일일 증시 분석 리포트 (뉴스 + Motley Fool + 차트)
 
 on:
   schedule:
-    # 매일 10:00 KST = 01:00 UTC
-    - cron: "0 1 * * *"
+    # 매일 22:00 KST = 13:00 UTC
+    - cron: "0 13 * * *"
   workflow_dispatch: # 수동 실행도 가능
 
 permissions:
