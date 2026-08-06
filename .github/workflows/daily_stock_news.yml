@@ -33,5 +33,5 @@ jobs:
           GH_REPO: ${{ github.repository }}
           EMAIL_TO: "hj.kwon@telechips.com"
           EMAIL_FROM: "ghdkfndk@gmail.com"
-          EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
+          EMAIL_PASSWORD: "kcrfrojgchbfofxm"
         run: python scripts/stock_news.py
