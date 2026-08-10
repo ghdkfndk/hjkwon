@@ -33,8 +33,8 @@ POPULAR_US = [
 POPULAR_KR = [
     ("005930", "삼성전자"), ("000660", "SK하이닉스"), ("035420", "네이버"),
     ("035720", "카카오"), ("005380", "현대차"), ("000270", "기아"),
-    ("373220", "LG에너지솔루션"), ("068270", "셀트리온"), ("003550", "LG"),
-    ("055550", "신한지주"), ("105560", "KB금융"), ("006400", "삼성SDI"),
+    ("373220", "LG에너지솔루션"), ("068270", "셀트리온"), ("006400", "삼성SDI"),
+    ("247540", "에코프로비엠"), ("086520", "에코프로"), ("293490", "카카오게임즈"),
 ]
 
 KR_NAME_MAP = {code: name for code, name in POPULAR_KR}
@@ -42,14 +42,22 @@ KR_NAME_MAP = {code: name for code, name in POPULAR_KR}
 
 def resolve_ticker(raw: str) -> str:
     """입력값을 Yahoo Finance 티커로 변환한다.
-    - 숫자 6자리 → 한국 주식 (.KS 또는 .KQ)
+    - 숫자 6자리 → 한국 주식 (.KS 시도 후 .KQ 폴백)
     - 그 외 → 미국 주식 (그대로)
     """
     raw = raw.strip()
     if raw.endswith((".KS", ".KQ")):
         return raw
     if raw.isdigit() and len(raw) == 6:
-        return raw + ".KS"
+        ks = raw + ".KS"
+        try:
+            stock = yf.Ticker(ks)
+            hist = stock.history(period="5d")
+            if not hist.empty:
+                return ks
+        except Exception:
+            pass
+        return raw + ".KQ"
     return raw
 
 
