@@ -1,0 +1,422 @@
+#!/usr/bin/env python3
+"""
+종목 분석 웹 앱.
+티커를 입력하면 실시간으로 주가·PER·실적 차트를 보여준다.
+
+실행: python app.py
+접속: http://localhost:5000
+"""
+
+import json
+import sys
+from datetime import datetime, timezone, timedelta
+from flask import Flask, request, jsonify, render_template_string
+
+try:
+    import yfinance as yf
+except ImportError:
+    print("yfinance 필요: pip install yfinance")
+    sys.exit(1)
+
+app = Flask(__name__)
+KST = timezone(timedelta(hours=9))
+
+POPULAR = [
+    ("NVDA", "엔비디아"), ("AAPL", "애플"), ("MSFT", "마이크로소프트"),
+    ("GOOGL", "구글"), ("AMZN", "아마존"), ("META", "메타"),
+    ("TSLA", "테슬라"), ("AMD", "AMD"), ("PLTR", "팔란티어"),
+    ("AVGO", "브로드컴"), ("NFLX", "넷플릭스"), ("SPCX", "스페이스X"),
+]
+
+HTML = """<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>📊 종목 분석기</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3"></script>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:-apple-system,'Nanum Gothic',sans-serif; background:linear-gradient(135deg,#0f0c29,#302b63,#24243e); min-height:100vh; color:#E0E0E0; }
+
+.top-bar { background:rgba(0,0,0,0.3); backdrop-filter:blur(10px); padding:16px 24px; position:sticky; top:0; z-index:100; border-bottom:1px solid rgba(255,255,255,0.1); }
+.top-bar h1 { font-size:22px; color:#fff; display:inline; }
+.search-box { display:flex; gap:8px; margin-top:12px; max-width:500px; }
+.search-box input { flex:1; padding:10px 16px; border-radius:24px; border:1px solid rgba(255,255,255,0.2); background:rgba(255,255,255,0.1); color:#fff; font-size:16px; outline:none; }
+.search-box input::placeholder { color:#888; }
+.search-box input:focus { border-color:#1976D2; box-shadow:0 0 0 3px rgba(25,118,210,0.3); }
+.search-box button { padding:10px 24px; border-radius:24px; border:none; background:linear-gradient(135deg,#1976D2,#1565C0); color:#fff; font-size:15px; font-weight:bold; cursor:pointer; }
+.search-box button:hover { background:linear-gradient(135deg,#1E88E5,#1976D2); }
+.search-box button:disabled { opacity:0.5; cursor:not-allowed; }
+
+.quick-tags { margin-top:10px; display:flex; flex-wrap:wrap; gap:6px; }
+.quick-tag { padding:4px 12px; border-radius:16px; border:1px solid rgba(255,255,255,0.15); background:rgba(255,255,255,0.05); color:#aaa; font-size:12px; cursor:pointer; transition:all 0.2s; }
+.quick-tag:hover { background:rgba(25,118,210,0.3); border-color:#1976D2; color:#fff; }
+
+.container { max-width:1200px; margin:0 auto; padding:20px; }
+
+.loading { text-align:center; padding:60px; }
+.loading .spinner { width:48px; height:48px; border:4px solid rgba(255,255,255,0.1); border-top-color:#1976D2; border-radius:50%; animation:spin 0.8s linear infinite; margin:0 auto 16px; }
+@keyframes spin { to { transform:rotate(360deg); } }
+
+.error-msg { text-align:center; padding:40px; color:#F44336; font-size:16px; }
+
+.stock-card { background:rgba(255,255,255,0.05); backdrop-filter:blur(10px); border:1px solid rgba(255,255,255,0.1); border-radius:16px; padding:24px; margin-bottom:24px; animation:fadeIn 0.4s ease; }
+@keyframes fadeIn { from { opacity:0; transform:translateY(20px); } to { opacity:1; transform:translateY(0); } }
+
+.card-header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:20px; flex-wrap:wrap; gap:12px; }
+.card-header h2 { color:#fff; font-size:24px; }
+.ticker-badge { background:#1976D2; color:#fff; padding:2px 10px; border-radius:12px; font-size:13px; font-weight:bold; margin-right:8px; }
+.sector { color:#888; font-size:13px; }
+.price-area { text-align:right; }
+.big-price { display:block; font-size:36px; font-weight:bold; color:#fff; }
+.price-change { font-size:14px; padding:3px 10px; border-radius:12px; font-weight:bold; }
+.price-up { background:rgba(76,175,80,0.2); color:#4CAF50; }
+.price-down { background:rgba(244,67,54,0.2); color:#F44336; }
+.mcap { color:#888; font-size:14px; margin-top:4px; }
+
+.metrics-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:16px; margin-bottom:20px; }
+.metric-card { background:rgba(255,255,255,0.05); border-radius:12px; padding:16px; }
+.metric-title { font-size:14px; font-weight:bold; color:#90CAF9; margin-bottom:10px; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:8px; }
+.metric-row { display:flex; justify-content:space-between; padding:5px 0; border-bottom:1px solid rgba(255,255,255,0.03); }
+.metric-label { color:#999; font-size:13px; }
+.metric-val { font-weight:bold; font-size:13px; }
+
+.score-banner { display:flex; align-items:center; gap:20px; padding:16px 20px; border-radius:12px; margin-bottom:20px; }
+.score-banner.A { background:rgba(76,175,80,0.15); border:1px solid rgba(76,175,80,0.3); }
+.score-banner.B { background:rgba(33,150,243,0.15); border:1px solid rgba(33,150,243,0.3); }
+.score-banner.C { background:rgba(255,193,7,0.15); border:1px solid rgba(255,193,7,0.3); }
+.score-banner.D { background:rgba(255,152,0,0.15); border:1px solid rgba(255,152,0,0.3); }
+.score-banner.F { background:rgba(244,67,54,0.15); border:1px solid rgba(244,67,54,0.3); }
+.score-num { font-size:48px; font-weight:bold; }
+.score-banner.A .score-num { color:#4CAF50; } .score-banner.B .score-num { color:#2196F3; }
+.score-banner.C .score-num { color:#FFC107; } .score-banner.D .score-num { color:#FF9800; }
+.score-banner.F .score-num { color:#F44336; }
+.score-detail { flex:1; }
+.score-grade { font-size:20px; font-weight:bold; color:#fff; }
+.score-items { margin-top:6px; font-size:13px; color:#bbb; line-height:1.7; }
+
+.w52 { margin:16px 0; padding:12px 16px; background:rgba(255,255,255,0.03); border-radius:8px; }
+.w52-labels { display:flex; justify-content:space-between; font-size:12px; color:#888; margin-bottom:6px; }
+.w52-track { position:relative; height:8px; background:rgba(255,255,255,0.1); border-radius:4px; }
+.w52-fill { height:100%; background:linear-gradient(90deg,#4CAF50,#FFC107,#F44336); border-radius:4px; }
+.w52-dot { position:absolute; top:-4px; width:16px; height:16px; background:#fff; border:3px solid #1976D2; border-radius:50%; transform:translateX(-50%); }
+
+.charts-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:16px; }
+.chart-wrap { background:rgba(255,255,255,0.03); border-radius:12px; padding:16px; }
+@media(max-width:768px) { .charts-grid{grid-template-columns:1fr;} .card-header{flex-direction:column;} }
+</style>
+</head>
+<body>
+<div class="top-bar">
+  <h1>📊 종목 분석기</h1>
+  <div class="search-box">
+    <input id="tickerInput" placeholder="티커 입력 (예: PLTR, NVDA, AAPL)" autofocus />
+    <button id="searchBtn" onclick="analyze()">분석</button>
+  </div>
+  <div class="quick-tags" id="quickTags"></div>
+</div>
+<div class="container" id="results"></div>
+
+<script>
+const POPULAR = POPULAR_JSON;
+
+document.getElementById('quickTags').innerHTML = POPULAR.map(
+  ([t,n]) => `<span class="quick-tag" onclick="quickSearch('${t}')">${t} ${n}</span>`
+).join('');
+
+document.getElementById('tickerInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') analyze();
+});
+
+function quickSearch(t) {
+  document.getElementById('tickerInput').value = t;
+  analyze();
+}
+
+async function analyze() {
+  const input = document.getElementById('tickerInput').value.trim().toUpperCase();
+  if (!input) return;
+  const tickers = input.split(/[\\s,]+/);
+  const results = document.getElementById('results');
+  const btn = document.getElementById('searchBtn');
+  
+  btn.disabled = true;
+  btn.textContent = '분석 중...';
+  results.innerHTML = '<div class="loading"><div class="spinner"></div><p>데이터를 가져오는 중...</p></div>';
+  
+  try {
+    const resp = await fetch('/api/analyze?tickers=' + tickers.join(','));
+    const data = await resp.json();
+    if (data.error) {
+      results.innerHTML = `<div class="error-msg">❌ ${data.error}</div>`;
+      return;
+    }
+    results.innerHTML = '';
+    data.stocks.forEach((s, i) => renderStock(s, i));
+  } catch(e) {
+    results.innerHTML = `<div class="error-msg">❌ 오류: ${e.message}</div>`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '분석';
+  }
+}
+
+function fmtCap(v) {
+  if (!v) return 'N/A';
+  if (v >= 1e12) return '$' + (v/1e12).toFixed(2) + 'T';
+  if (v >= 1e9) return '$' + (v/1e9).toFixed(1) + 'B';
+  return '$' + (v/1e6).toFixed(0) + 'M';
+}
+
+function peLabel(pe) {
+  if (pe == null) return ['N/A','#999'];
+  if (pe < 0) return [pe.toFixed(1)+' (적자)','#F44336'];
+  if (pe < 15) return [pe.toFixed(1)+' (저평가)','#4CAF50'];
+  if (pe < 25) return [pe.toFixed(1)+' (적정)','#2196F3'];
+  if (pe < 40) return [pe.toFixed(1)+' (고평가)','#FF9800'];
+  return [pe.toFixed(1)+' (매우 고평가)','#F44336'];
+}
+
+function renderStock(s, idx) {
+  const c = document.getElementById('results');
+  const [peText,peColor] = peLabel(s.trailing_pe);
+  const [fpeText,fpeColor] = peLabel(s.forward_pe);
+  
+  const changeClass = s.monthly_return >= 0 ? 'price-up' : 'price-down';
+  const changeText = s.monthly_return != null ? (s.monthly_return >= 0 ? '+' : '') + s.monthly_return.toFixed(1) + '% (1개월)' : '';
+  
+  const grade = s.score_grade || 'C';
+  const gradeEmoji = {A:'🟢',B:'🔵',C:'🟡',D:'🟠',F:'🔴'}[grade] || '⚪';
+  
+  let metricsHtml = '';
+  if (s.revenue_growth != null) {
+    const rg = (s.revenue_growth*100);
+    const rc = rg > 20 ? '#4CAF50' : rg > 0 ? '#FF9800' : '#F44336';
+    metricsHtml += `<div class="metric-row"><span class="metric-label">매출 성장률</span><span class="metric-val" style="color:${rc}">${rg > 0 ? '+' : ''}${rg.toFixed(1)}%</span></div>`;
+  }
+  if (s.earnings_growth != null) {
+    const eg = (s.earnings_growth*100);
+    const ec = eg > 20 ? '#4CAF50' : eg > 0 ? '#FF9800' : '#F44336';
+    metricsHtml += `<div class="metric-row"><span class="metric-label">이익 성장률</span><span class="metric-val" style="color:${ec}">${eg > 0 ? '+' : ''}${eg.toFixed(1)}%</span></div>`;
+  }
+  if (s.profit_margin != null) metricsHtml += `<div class="metric-row"><span class="metric-label">이익률</span><span class="metric-val">${(s.profit_margin*100).toFixed(1)}%</span></div>`;
+  if (s.peg != null) {
+    const pc = s.peg < 1 ? '#4CAF50' : s.peg < 1.5 ? '#2196F3' : s.peg < 3 ? '#FF9800' : '#F44336';
+    metricsHtml += `<div class="metric-row"><span class="metric-label">PEG</span><span class="metric-val" style="color:${pc}">${s.peg.toFixed(2)}</span></div>`;
+  }
+
+  let w52Html = '';
+  if (s.w52_high && s.w52_low && s.current_price) {
+    const pos = ((s.current_price - s.w52_low) / (s.w52_high - s.w52_low) * 100).toFixed(0);
+    w52Html = `<div class="w52"><div class="w52-labels"><span>$${s.w52_low.toFixed(0)}</span><span>52주 범위 (현재 ${pos}%)</span><span>$${s.w52_high.toFixed(0)}</span></div><div class="w52-track"><div class="w52-fill" style="width:${pos}%"></div><div class="w52-dot" style="left:${pos}%"></div></div></div>`;
+  }
+
+  const scoreItems = (s.score_details || []).map(d => d.replace(/\\n/g, '<br>')).join('<br>');
+
+  const div = document.createElement('div');
+  div.className = 'stock-card';
+  div.innerHTML = `
+    <div class="card-header">
+      <div>
+        <h2>${s.name}</h2>
+        <span class="ticker-badge">${s.ticker}</span>
+        <span class="sector">${s.sector || ''} ${s.industry ? '· '+s.industry : ''}</span>
+      </div>
+      <div class="price-area">
+        <span class="big-price">$${s.current_price ? s.current_price.toFixed(2) : 'N/A'}</span>
+        <span class="price-change ${changeClass}">${changeText}</span>
+        <div class="mcap">${fmtCap(s.market_cap)}</div>
+      </div>
+    </div>
+    <div class="score-banner ${grade}">
+      <div class="score-num">${s.score}</div>
+      <div class="score-detail">
+        <div class="score-grade">${gradeEmoji} 등급 ${grade}</div>
+        <div class="score-items">${scoreItems}</div>
+      </div>
+    </div>
+    <div class="metrics-grid">
+      <div class="metric-card">
+        <div class="metric-title">밸류에이션</div>
+        <div class="metric-row"><span class="metric-label">Trailing PER</span><span class="metric-val" style="color:${peColor}">${peText}</span></div>
+        <div class="metric-row"><span class="metric-label">Forward PER</span><span class="metric-val" style="color:${fpeColor}">${fpeText}</span></div>
+        <div class="metric-row"><span class="metric-label">PBR</span><span class="metric-val">${s.pb != null ? s.pb.toFixed(2) : 'N/A'}</span></div>
+        <div class="metric-row"><span class="metric-label">EPS</span><span class="metric-val">$${s.eps != null ? s.eps.toFixed(2) : 'N/A'}</span></div>
+        <div class="metric-row"><span class="metric-label">Forward EPS</span><span class="metric-val">$${s.forward_eps != null ? s.forward_eps.toFixed(2) : 'N/A'}</span></div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-title">성장성</div>
+        ${metricsHtml}
+      </div>
+    </div>
+    ${w52Html}
+    <div class="charts-grid">
+      <div class="chart-wrap"><canvas id="price_${idx}"></canvas></div>
+      <div class="chart-wrap"><canvas id="per_${idx}"></canvas></div>
+    </div>
+    <div class="charts-grid">
+      <div class="chart-wrap"><canvas id="rev_${idx}"></canvas></div>
+      <div class="chart-wrap"><canvas id="margin_${idx}"></canvas></div>
+    </div>`;
+  c.appendChild(div);
+
+  new Chart(document.getElementById('price_'+idx), {
+    type:'line',
+    data:{datasets:[{label:'주가 ($)',data:s.price_history,borderColor:'#1976D2',backgroundColor:'rgba(25,118,210,0.1)',fill:true,tension:0.3,pointRadius:0}]},
+    options:{responsive:true,plugins:{title:{display:true,text:'주가 추이 (1년)',font:{size:14}}},scales:{x:{type:'time',time:{unit:'month'}}}}
+  });
+  new Chart(document.getElementById('per_'+idx), {
+    type:'line',
+    data:{datasets:[{label:'PER',data:s.per_history,borderColor:'#F44336',backgroundColor:'rgba(244,67,54,0.1)',fill:true,tension:0.3,pointRadius:0}]},
+    options:{responsive:true,plugins:{title:{display:true,text:'PER 추이 (1년)',font:{size:14}}},scales:{x:{type:'time',time:{unit:'month'}}}}
+  });
+  if (s.quarters && s.quarters.length) {
+    new Chart(document.getElementById('rev_'+idx), {
+      type:'bar',
+      data:{labels:s.quarters.map(q=>q.label),datasets:[{label:'매출 ($B)',data:s.quarters.map(q=>q.revenue),backgroundColor:'rgba(25,118,210,0.8)'},{label:'순이익 ($B)',data:s.quarters.map(q=>q.net_income),backgroundColor:'rgba(76,175,80,0.8)'}]},
+      options:{responsive:true,plugins:{title:{display:true,text:'분기별 매출 & 순이익',font:{size:14}}}}
+    });
+    new Chart(document.getElementById('margin_'+idx), {
+      type:'bar',
+      data:{labels:s.quarters.map(q=>q.label),datasets:[{label:'이익률 (%)',data:s.quarters.map(q=>q.margin),backgroundColor:s.quarters.map(q=>q.margin>40?'rgba(76,175,80,0.8)':q.margin>20?'rgba(255,193,7,0.8)':'rgba(244,67,54,0.8)')}]},
+      options:{responsive:true,plugins:{title:{display:true,text:'분기별 이익률',font:{size:14}}},scales:{y:{beginAtZero:true}}}
+    });
+  }
+}
+</script>
+</body>
+</html>"""
+
+
+def fetch_stock(ticker: str) -> dict | None:
+    try:
+        stock = yf.Ticker(ticker)
+        info = stock.info or {}
+        hist = stock.history(period="1y")
+        if hist.empty:
+            return None
+
+        shares = info.get("sharesOutstanding", 1)
+        income = stock.quarterly_income_stmt
+        quarters = []
+        if income is not None and not income.empty:
+            ni_row = income.loc["Net Income"] if "Net Income" in income.index else None
+            rev_row = income.loc["Total Revenue"] if "Total Revenue" in income.index else None
+            if ni_row is not None and rev_row is not None:
+                for col in reversed(ni_row.index[:8]):
+                    ni = float(ni_row[col])
+                    rev = float(rev_row[col])
+                    import math
+                    margin = (ni / rev * 100) if rev else 0
+                    if math.isnan(margin) or math.isinf(margin):
+                        margin = 0
+                    ni_val = round(ni / 1e9, 3) if not math.isnan(ni) else 0
+                    rev_val = round(rev / 1e9, 3) if not math.isnan(rev) else 0
+                    quarters.append({
+                        "label": col.strftime("%y/%m"),
+                        "revenue": rev_val,
+                        "net_income": ni_val,
+                        "margin": round(margin, 1),
+                    })
+
+        trailing_eps = info.get("trailingEps") or 1
+        price_history = []
+        per_history = []
+        for i in range(0, len(hist), 3):
+            row = hist.iloc[i]
+            d = row.name.strftime("%Y-%m-%d")
+            p = round(float(row["Close"]), 2)
+            price_history.append({"x": d, "y": p})
+            if trailing_eps > 0:
+                per_history.append({"x": d, "y": round(p / trailing_eps, 1)})
+        last = hist.iloc[-1]
+        price_history.append({"x": last.name.strftime("%Y-%m-%d"), "y": round(float(last["Close"]), 2)})
+        if trailing_eps > 0:
+            per_history.append({"x": last.name.strftime("%Y-%m-%d"), "y": round(float(last["Close"]) / trailing_eps, 1)})
+
+        monthly_return = None
+        if len(hist) >= 20:
+            s_price = float(hist["Close"].iloc[0])
+            e_price = float(hist["Close"].iloc[-1])
+            monthly_return = round(((e_price - s_price) / s_price) * 100, 1)
+
+        # 스코어 계산
+        from scripts.stock_charts import calculate_investment_score, fetch_stock_data
+        full_data = fetch_stock_data(ticker)
+        score_data = calculate_investment_score(full_data) if full_data else {"total": 50, "grade": "C", "details": [], "scores": {}}
+
+        return {
+            "ticker": ticker,
+            "name": info.get("shortName", ticker),
+            "sector": info.get("sector", ""),
+            "industry": info.get("industry", ""),
+            "current_price": info.get("currentPrice") or info.get("regularMarketPrice"),
+            "market_cap": info.get("marketCap"),
+            "trailing_pe": info.get("trailingPE"),
+            "forward_pe": info.get("forwardPE"),
+            "peg": info.get("pegRatio"),
+            "pb": info.get("priceToBook"),
+            "eps": info.get("trailingEps"),
+            "forward_eps": info.get("forwardEps"),
+            "revenue_growth": info.get("revenueGrowth"),
+            "earnings_growth": info.get("earningsGrowth"),
+            "profit_margin": info.get("profitMargins"),
+            "w52_high": info.get("fiftyTwoWeekHigh"),
+            "w52_low": info.get("fiftyTwoWeekLow"),
+            "monthly_return": monthly_return,
+            "price_history": price_history,
+            "per_history": per_history,
+            "quarters": quarters,
+            "score": score_data["total"],
+            "score_grade": score_data["grade"],
+            "score_details": score_data["details"],
+        }
+    except Exception as e:
+        print(f"[ERROR] {ticker}: {e}")
+        return None
+
+
+@app.route("/")
+def index():
+    html = HTML.replace("POPULAR_JSON", json.dumps(POPULAR, ensure_ascii=False))
+    return html
+
+
+@app.route("/api/analyze")
+def api_analyze():
+    tickers_raw = request.args.get("tickers", "")
+    tickers = [t.strip().upper() for t in tickers_raw.split(",") if t.strip()]
+    if not tickers:
+        return jsonify({"error": "티커를 입력해 주세요"})
+
+    stocks = []
+    for t in tickers[:5]:
+        data = fetch_stock(t)
+        if data:
+            stocks.append(data)
+
+    if not stocks:
+        return jsonify({"error": f"'{tickers_raw}' 데이터를 찾을 수 없습니다. 티커를 확인해 주세요."})
+
+    import math
+
+    def clean_nan(obj):
+        if isinstance(obj, float) and (math.isnan(obj) or math.isinf(obj)):
+            return None
+        if isinstance(obj, dict):
+            return {k: clean_nan(v) for k, v in obj.items()}
+        if isinstance(obj, list):
+            return [clean_nan(v) for v in obj]
+        return obj
+
+    return jsonify({"stocks": clean_nan(stocks)})
+
+
+if __name__ == "__main__":
+    print("=" * 50)
+    print("  📊 종목 분석기")
+    print("  http://localhost:5000")
+    print("=" * 50)
+    app.run(host="0.0.0.0", port=5000, debug=False)
