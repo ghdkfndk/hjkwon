@@ -415,8 +415,15 @@ def api_analyze():
 
 
 if __name__ == "__main__":
+    import webbrowser
+    import threading
+
+    port = 5000
     print("=" * 50)
     print("  📊 종목 분석기")
-    print("  http://localhost:5000")
+    print(f"  http://localhost:{port}")
+    print("  종료: Ctrl+C")
     print("=" * 50)
-    app.run(host="0.0.0.0", port=5000, debug=False)
+
+    threading.Timer(1.5, lambda: webbrowser.open(f"http://localhost:{port}")).start()
+    app.run(host="0.0.0.0", port=port, debug=False)
