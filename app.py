@@ -127,6 +127,22 @@ def resolve_ticker(raw: str) -> str:
                 print(f"[INFO] Yahoo 검색 결과: {result}")
                 return result
 
+        # 변형 검색 시도 (공백 제거, 소문자 등)
+        variants = set()
+        variants.add(en_name.replace(" ", ""))
+        variants.add(en_name.lower().replace(" ", ""))
+        variants.add(en_name.lower())
+        # 단어 앞 3~4글자로 부분 검색
+        first_word = en_name.split()[0] if en_name.split() else ""
+        if len(first_word) >= 3:
+            variants.add(first_word.lower())
+        variants.discard(en_name)
+        for variant in variants:
+            result = _search_yahoo(variant, prefer_kr=True)
+            if result:
+                print(f"[INFO] Yahoo 검색 결과 (변형 '{variant}'): {result}")
+                return result
+
     result = _search_yahoo(raw)
     if result:
         return result
@@ -597,7 +613,7 @@ def api_analyze():
             stocks.append(data)
 
     if not stocks:
-        return jsonify({"error": f"'{tickers_raw}' 데이터를 찾을 수 없습니다. 티커를 확인해 주세요."})
+        return jsonify({"error": f"'{tickers_raw}' 을(를) 찾을 수 없습니다. 종목 코드(예: 054450, 059120)로 다시 시도해 보세요."})
 
     import math
 
