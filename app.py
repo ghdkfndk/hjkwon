@@ -38,16 +38,64 @@ POPULAR_KR = [
 ]
 
 KR_NAME_MAP = {code: name for code, name in POPULAR_KR}
+KR_NAME_TO_CODE = {name: code for code, name in POPULAR_KR}
+
+
+def _search_yahoo(query: str, prefer_kr: bool = False) -> str | None:
+    """Yahoo Finance autocomplete로 티커를 검색한다."""
+    from urllib.request import urlopen, Request
+    from urllib.parse import quote
+    try:
+        url = f"https://query1.finance.yahoo.com/v6/finance/autocomplete?query={quote(query)}&lang=en"
+        req = Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with urlopen(req, timeout=8) as resp:
+            data = json.loads(resp.read())
+            results = data.get("ResultSet", {}).get("Result", [])
+            if not results:
+                return None
+            if prefer_kr:
+                for r in results:
+                    sym = r["symbol"]
+                    if sym.endswith((".KS", ".KQ")):
+                        return sym
+            return results[0]["symbol"]
+    except Exception:
+        pass
+    return None
+
+
+def _translate_to_english(text: str) -> str:
+    """한글을 영어로 번역 (Yahoo 검색용)."""
+    from urllib.request import urlopen, Request
+    from urllib.parse import quote
+    try:
+        url = (
+            "https://translate.googleapis.com/translate_a/single"
+            f"?client=gtx&sl=ko&tl=en&dt=t&q={quote(text)}"
+        )
+        req = Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with urlopen(req, timeout=5) as resp:
+            data = json.loads(resp.read())
+            return "".join(part[0] for part in data[0] if part[0]).strip()
+    except Exception:
+        return text
+
+
+def _has_korean(text: str) -> bool:
+    import re
+    return bool(re.search(r"[가-힣]", text))
 
 
 def resolve_ticker(raw: str) -> str:
     """입력값을 Yahoo Finance 티커로 변환한다.
     - 숫자 6자리 → 한국 주식 (.KS 시도 후 .KQ 폴백)
-    - 그 외 → 미국 주식 (그대로)
+    - 한글 → 사전 매핑 → 영문 번역 → Yahoo 검색
+    - 그 외 → Yahoo 검색 또는 그대로
     """
     raw = raw.strip()
     if raw.endswith((".KS", ".KQ")):
         return raw
+
     if raw.isdigit() and len(raw) == 6:
         ks = raw + ".KS"
         try:
@@ -58,7 +106,51 @@ def resolve_ticker(raw: str) -> str:
         except Exception:
             pass
         return raw + ".KQ"
+
+    if _has_korean(raw):
+        if raw in KR_NAME_TO_CODE:
+            code = KR_NAME_TO_CODE[raw]
+            return resolve_ticker(code)
+
+        en_name = _translate_to_english(raw)
+        print(f"[INFO] '{raw}' → 영문 변환: '{en_name}'")
+        result = _search_yahoo(en_name, prefer_kr=True)
+        if result:
+            print(f"[INFO] Yahoo 검색 결과: {result}")
+            return result
+
+        romanized = _transliterate_korean(raw)
+        if romanized != en_name:
+            print(f"[INFO] 로마자 변환 시도: '{romanized}'")
+            result = _search_yahoo(romanized, prefer_kr=True)
+            if result:
+                print(f"[INFO] Yahoo 검색 결과: {result}")
+                return result
+
+    result = _search_yahoo(raw)
+    if result:
+        return result
+
     return raw
+
+
+def _transliterate_korean(text: str) -> str:
+    """한글을 로마자(발음)로 변환 (Google Translate 활용)."""
+    from urllib.request import urlopen, Request
+    from urllib.parse import quote
+    try:
+        url = (
+            "https://translate.googleapis.com/translate_a/single"
+            f"?client=gtx&sl=ko&tl=en&dt=rm&q={quote(text)}"
+        )
+        req = Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with urlopen(req, timeout=5) as resp:
+            data = json.loads(resp.read())
+            if len(data) > 3 and data[3]:
+                return data[3]
+    except Exception:
+        pass
+    return text
 
 
 def get_display_name(ticker: str, info: dict) -> str:
