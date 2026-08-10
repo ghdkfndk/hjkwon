@@ -6,6 +6,7 @@
 실행: python app.py
 접속: http://localhost:5000
 """
+from __future__ import annotations
 
 import json
 import sys

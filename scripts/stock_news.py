@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+from __future__ import annotations
 """
 2단계 증시 분석 자동화 스크립트.
 

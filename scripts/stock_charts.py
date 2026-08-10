@@ -4,6 +4,7 @@
 
 yfinance로 데이터를 가져오고 matplotlib로 차트를 그린다.
 """
+from __future__ import annotations
 
 import os
 import sys
