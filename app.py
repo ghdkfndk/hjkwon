@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 from datetime import datetime, timezone, timedelta
 from flask import Flask, request, jsonify, render_template_string
@@ -419,7 +420,7 @@ if __name__ == "__main__":
     import webbrowser
     import threading
 
-    port = 5001
+    port = int(os.environ.get("PORT", 5001))
     print("=" * 50)
     print("  📊 종목 분석기")
     print(f"  http://localhost:{port}")
