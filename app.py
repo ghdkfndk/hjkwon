@@ -97,15 +97,19 @@ def resolve_ticker(raw: str) -> str:
         return raw
 
     if raw.isdigit() and len(raw) == 6:
-        ks = raw + ".KS"
-        try:
-            stock = yf.Ticker(ks)
-            hist = stock.history(period="5d")
-            if not hist.empty:
-                return ks
-        except Exception:
-            pass
-        return raw + ".KQ"
+        for suffix in (".KS", ".KQ"):
+            candidate = raw + suffix
+            try:
+                stock = yf.Ticker(candidate)
+                info = stock.info or {}
+                name = info.get("shortName", "")
+                if name and "," not in name and len(name) < 50:
+                    hist = stock.history(period="5d")
+                    if not hist.empty:
+                        return candidate
+            except Exception:
+                pass
+        return raw + ".KS"
 
     if _has_korean(raw):
         if raw in KR_NAME_TO_CODE:
@@ -270,6 +274,20 @@ body { font-family:-apple-system,'Nanum Gothic',sans-serif; background:linear-gr
 
 .charts-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:16px; }
 .chart-wrap { background:rgba(255,255,255,0.03); border-radius:12px; padding:16px; }
+.direction-box { background:rgba(255,255,255,0.05); border-radius:12px; padding:16px; margin-bottom:16px; }
+.direction-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; }
+.direction-title { font-size:15px; font-weight:bold; color:#90CAF9; }
+.outlook-badge { padding:4px 14px; border-radius:16px; font-size:13px; font-weight:bold; }
+.theme-tags { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:8px; }
+.theme-tag { padding:3px 10px; border-radius:12px; font-size:12px; background:rgba(76,175,80,0.2); color:#81C784; }
+.risk-tag { padding:3px 10px; border-radius:12px; font-size:12px; background:rgba(244,67,54,0.2); color:#EF9A9A; }
+.news-list { margin-top:12px; }
+.news-item { padding:10px 0; border-bottom:1px solid rgba(255,255,255,0.05); }
+.news-item:last-child { border-bottom:none; }
+.news-title { color:#E0E0E0; font-size:14px; text-decoration:none; line-height:1.5; }
+.news-title:hover { color:#90CAF9; }
+.news-meta { font-size:11px; color:#777; margin-top:4px; }
+.news-summary { font-size:12px; color:#999; margin-top:4px; line-height:1.4; }
 @media(max-width:768px) { .charts-grid{grid-template-columns:1fr;} .card-header{flex-direction:column;} }
 </style>
 </head>
@@ -366,6 +384,36 @@ function peLabel(pe) {
   return [pe.toFixed(1)+' (매우 고평가)','#F44336'];
 }
 
+function renderDirection(s) {
+  const d = s.direction;
+  if (!d) return '';
+  const themes = (d.themes||[]).map(t=>`<span class="theme-tag">📈 ${t}</span>`).join('');
+  const risks = (d.risks||[]).map(r=>`<span class="risk-tag">⚠️ ${r}</span>`).join('');
+  return `<div class="direction-box">
+    <div class="direction-header">
+      <span class="direction-title">🔭 기업 방향성 분석</span>
+      <span class="outlook-badge" style="background:rgba(0,0,0,0.3);color:${d.outlook_color}">${d.outlook} (뉴스 ${d.news_count}건 분석)</span>
+    </div>
+    ${themes ? '<div style="margin-bottom:6px;color:#aaa;font-size:12px;">핵심 테마</div><div class="theme-tags">'+themes+'</div>' : ''}
+    ${risks ? '<div style="margin-bottom:6px;color:#aaa;font-size:12px;margin-top:8px;">리스크 요인</div><div class="theme-tags">'+risks+'</div>' : ''}
+  </div>`;
+}
+
+function renderNews(s) {
+  const news = s.news;
+  if (!news || !news.length) return '';
+  const items = news.map(n => {
+    const link = n.link ? `<a href="${n.link}" target="_blank" class="news-title">${n.title}</a>` : `<span class="news-title">${n.title}</span>`;
+    const meta = [n.source, n.date ? new Date(n.date).toLocaleDateString('ko-KR') : ''].filter(Boolean).join(' · ');
+    const summary = n.summary ? `<div class="news-summary">${n.summary}</div>` : '';
+    return `<div class="news-item">${link}<div class="news-meta">${meta}</div>${summary}</div>`;
+  }).join('');
+  return `<div class="direction-box">
+    <div class="direction-title" style="margin-bottom:12px;">📰 최근 뉴스</div>
+    <div class="news-list">${items}</div>
+  </div>`;
+}
+
 function renderStock(s, idx) {
   const c = document.getElementById('results');
   const [peText,peColor] = peLabel(s.trailing_pe);
@@ -442,6 +490,8 @@ function renderStock(s, idx) {
       </div>
     </div>
     ${w52Html}
+    ${renderDirection(s)}
+    ${renderNews(s)}
     <div class="charts-grid">
       <div class="chart-wrap"><canvas id="price_${idx}"></canvas></div>
       <div class="chart-wrap"><canvas id="per_${idx}"></canvas></div>
@@ -478,6 +528,122 @@ function renderStock(s, idx) {
 </script>
 </body>
 </html>"""
+
+
+def _fetch_news(ticker: str, name: str) -> list[dict]:
+    """종목 관련 최신 뉴스를 가져온다."""
+    from urllib.request import urlopen, Request
+    from urllib.parse import quote
+    from xml.etree import ElementTree
+    import re
+    news = []
+
+    is_kr = ticker.endswith((".KS", ".KQ"))
+
+    if is_kr:
+        search_name = name if _has_korean(name) else ticker.split(".")[0]
+        url = f"https://news.google.com/rss/search?q={quote(search_name)}&hl=ko&gl=KR&ceid=KR:ko"
+        try:
+            req = Request(url, headers={"User-Agent": "Mozilla/5.0"})
+            with urlopen(req, timeout=10) as resp:
+                tree = ElementTree.parse(resp)
+            for item in list(tree.iter("item"))[:8]:
+                title = (item.findtext("title") or "").strip()
+                link = (item.findtext("link") or "").strip()
+                pub = (item.findtext("pubDate") or "").strip()
+                source = title.split(" - ")[-1] if " - " in title else ""
+                headline = title.rsplit(" - ", 1)[0] if " - " in title else title
+                if headline:
+                    news.append({"title": headline, "source": source, "link": link, "date": pub})
+        except Exception as e:
+            print(f"[WARN] Google News 실패: {e}")
+    else:
+        try:
+            stock = yf.Ticker(ticker)
+            yf_news = stock.news or []
+            for n in yf_news[:8]:
+                content = n.get("content", n)
+                title = content.get("title", "")
+                summary = content.get("summary", "")
+                provider = content.get("provider", {})
+                source = provider.get("displayName", "") if isinstance(provider, dict) else ""
+                link_data = content.get("canonicalUrl", content.get("clickThroughUrl", {}))
+                link = link_data.get("url", "") if isinstance(link_data, dict) else ""
+                pub = content.get("pubDate", "")
+                if title:
+                    news.append({"title": title, "source": source, "link": link,
+                                 "date": pub, "summary": summary})
+        except Exception as e:
+            print(f"[WARN] Yahoo News 실패: {e}")
+
+    return news
+
+
+def _analyze_company_direction(news: list[dict], name: str) -> dict:
+    """뉴스를 분석하여 기업 비전/방향성을 요약한다."""
+    import re
+
+    keywords_positive = {
+        "성장": "성장", "확대": "사업 확대", "진출": "신규 진출", "수주": "수주",
+        "흑자": "흑자 전환", "신제품": "신제품", "투자": "투자 확대",
+        "AI": "AI/인공지능", "반도체": "반도체", "로봇": "로봇",
+        "전기차": "전기차/EV", "배터리": "배터리", "자율주행": "자율주행",
+        "클라우드": "클라우드", "데이터센터": "데이터센터",
+        "growth": "성장", "expansion": "사업 확대", "launch": "신규 출시",
+        "revenue": "매출", "profit": "수익", "partnership": "파트너십",
+        "innovation": "혁신", "breakthrough": "기술 돌파",
+    }
+
+    keywords_risk = {
+        "적자": "적자", "감소": "실적 감소", "하락": "주가 하락",
+        "리스크": "리스크", "소송": "법적 리스크", "규제": "규제",
+        "경쟁": "경쟁 심화", "둔화": "성장 둔화",
+        "loss": "손실", "decline": "하락", "risk": "리스크",
+        "lawsuit": "소송", "regulation": "규제",
+    }
+
+    themes = {}
+    risks = {}
+    all_text = " ".join(n["title"] + " " + n.get("summary", "") for n in news).lower()
+
+    for keyword, theme in keywords_positive.items():
+        if keyword.lower() in all_text:
+            themes[theme] = themes.get(theme, 0) + 1
+
+    for keyword, risk in keywords_risk.items():
+        if keyword.lower() in all_text:
+            risks[risk] = risks.get(risk, 0) + 1
+
+    top_themes = sorted(themes.items(), key=lambda x: x[1], reverse=True)[:5]
+    top_risks = sorted(risks.items(), key=lambda x: x[1], reverse=True)[:3]
+
+    positive_count = sum(themes.values())
+    negative_count = sum(risks.values())
+    total = positive_count + negative_count
+
+    if total == 0:
+        outlook = "정보 부족"
+        outlook_color = "#999"
+    elif positive_count > negative_count * 2:
+        outlook = "매우 긍정적"
+        outlook_color = "#4CAF50"
+    elif positive_count > negative_count:
+        outlook = "긍정적"
+        outlook_color = "#8BC34A"
+    elif negative_count > positive_count:
+        outlook = "부정적"
+        outlook_color = "#F44336"
+    else:
+        outlook = "중립"
+        outlook_color = "#FF9800"
+
+    return {
+        "outlook": outlook,
+        "outlook_color": outlook_color,
+        "themes": [t[0] for t in top_themes],
+        "risks": [r[0] for r in top_risks],
+        "news_count": len(news),
+    }
 
 
 def fetch_stock(raw_ticker: str) -> dict | None:
@@ -560,7 +726,7 @@ def fetch_stock(raw_ticker: str) -> dict | None:
         full_data = fetch_stock_data(ticker)
         score_data = calculate_investment_score(full_data) if full_data else {"total": 50, "grade": "C", "details": [], "scores": {}}
 
-        return {
+        result = {
             "ticker": ticker,
             "name": display_name,
             "sector": info.get("sector", ""),
@@ -587,6 +753,15 @@ def fetch_stock(raw_ticker: str) -> dict | None:
             "score_grade": score_data["grade"],
             "score_details": score_data["details"],
         }
+
+        print(f"[INFO] {display_name} 뉴스 수집 중...")
+        news_list = _fetch_news(ticker, display_name)
+        direction = _analyze_company_direction(news_list, display_name)
+        result["news"] = news_list[:6]
+        result["direction"] = direction
+        print(f"[INFO] {display_name} 뉴스 {len(news_list)}건, 전망: {direction['outlook']}")
+
+        return result
     except Exception as e:
         print(f"[ERROR] {ticker}: {e}")
         return None
