@@ -419,7 +419,7 @@ if __name__ == "__main__":
     import webbrowser
     import threading
 
-    port = 5000
+    port = 5001
     print("=" * 50)
     print("  📊 종목 분석기")
     print(f"  http://localhost:{port}")
