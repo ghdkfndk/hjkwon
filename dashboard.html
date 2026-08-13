@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>📊 종목 대시보드</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3"></script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, 'Nanum Gothic', sans-serif; background: linear-gradient(135deg, #0f0c29, #302b63, #24243e); min-height: 100vh; color: #E0E0E0; padding: 20px; }
+h1 { text-align: center; color: #fff; font-size: 28px; margin-bottom: 8px; }
+.subtitle { text-align: center; color: #aaa; margin-bottom: 30px; font-size: 14px; }
+.stock-card { background: rgba(255,255,255,0.05); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.1); border-radius: 16px; padding: 24px; margin-bottom: 30px; }
+.card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; flex-wrap: wrap; gap: 12px; }
+.card-header h2 { color: #fff; font-size: 24px; margin-bottom: 4px; }
+.ticker { background: #1976D2; color: #fff; padding: 2px 10px; border-radius: 12px; font-size: 13px; font-weight: bold; margin-right: 8px; }
+.sector { color: #aaa; font-size: 13px; }
+.price-box { text-align: right; }
+.current-price { display: block; font-size: 32px; font-weight: bold; color: #fff; }
+.market-cap { color: #aaa; font-size: 14px; }
+.metrics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-bottom: 20px; }
+.metric-card { background: rgba(255,255,255,0.05); border-radius: 12px; padding: 16px; }
+.metric-title { font-size: 15px; font-weight: bold; color: #90CAF9; margin-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 8px; }
+.metric-item { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.03); }
+.metric-label { color: #aaa; font-size: 14px; }
+.metric-value { font-weight: bold; font-size: 14px; }
+.w52-range { margin: 16px 0; padding: 12px 16px; background: rgba(255,255,255,0.03); border-radius: 8px; }
+.w52-label { display: flex; justify-content: space-between; font-size: 12px; color: #aaa; margin-bottom: 6px; }
+.w52-bar { position: relative; height: 8px; background: rgba(255,255,255,0.1); border-radius: 4px; }
+.w52-fill { height: 100%; background: linear-gradient(90deg, #4CAF50, #FFC107, #F44336); border-radius: 4px; }
+.w52-dot { position: absolute; top: -4px; width: 16px; height: 16px; background: #fff; border: 3px solid #1976D2; border-radius: 50%; transform: translateX(-50%); }
+.charts-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+.chart-box { background: rgba(255,255,255,0.03); border-radius: 12px; padding: 16px; }
+canvas { max-height: 280px; }
+@media (max-width: 768px) { .charts-row { grid-template-columns: 1fr; } .card-header { flex-direction: column; } }
+</style>
+</head>
+<body>
+<h1>📊 종목 대시보드</h1>
+<p class="subtitle">2026년 08월 10일 16:28 KST</p>
+
+        <div class="stock-card">
+            <div class="card-header">
+                <div>
+                    <h2>Palantir Technologies Inc.</h2>
+                    <span class="ticker">PLTR</span>
+                    <span class="sector">Technology · Software - Infrastructure</span>
+                </div>
+                <div class="price-box">
+                    <span class="current-price">$172.01</span>
+                    <span class="market-cap">$413.4B</span>
+                </div>
+            </div>
+
+            <div class="metrics-grid">
+                <div class="metric-card">
+                    <div class="metric-title">밸류에이션</div>
+                    <div class="metric-item"><span class="metric-label">Trailing PER</span><span class="metric-value" style="color:#F44336">147.0 (매우 고평가)</span></div>
+                    <div class="metric-item"><span class="metric-label">Forward PER</span><span class="metric-value" style="color:#F44336">74.5 (매우 고평가)</span></div>
+                    <div class="metric-item"><span class="metric-label">PBR</span><span class="metric-value">42.23</span></div>
+                    <div class="metric-item"><span class="metric-label">EPS</span><span class="metric-value">$1.17</span></div>
+                    <div class="metric-item"><span class="metric-label">Forward EPS</span><span class="metric-value">$2.31</span></div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-title">성장성</div>
+                    <div class="metric-item"><span class="metric-label">매출 성장률</span><span class="metric-value" style="color:#4CAF50">+92.8%</span></div><div class="metric-item"><span class="metric-label">이익 성장률</span><span class="metric-value" style="color:#4CAF50">+215.4%</span></div><div class="metric-item"><span class="metric-label">이익률</span><span class="metric-value">49.0%</span></div><div class="metric-item"><span class="metric-label">PEG</span><span class="metric-value" style="color:#FF9800">2.37</span></div>
+                </div>
+            </div>
+
+            
+            <div class="w52-range">
+                <div class="w52-label"><span>$106</span><span>52주 범위</span><span>$208</span></div>
+                <div class="w52-bar"><div class="w52-fill" style="width:65%"></div><div class="w52-dot" style="left:65%"></div></div>
+            </div>
+
+            <div class="charts-row">
+                <div class="chart-box"><canvas id="priceChart0"></canvas></div>
+                <div class="chart-box"><canvas id="perChart0"></canvas></div>
+            </div>
+            <div class="charts-row">
+                <div class="chart-box"><canvas id="revenueChart0"></canvas></div>
+                <div class="chart-box"><canvas id="marginChart0"></canvas></div>
+            </div>
+        </div>
+        
+        <div class="stock-card">
+            <div class="card-header">
+                <div>
+                    <h2>NVIDIA Corporation</h2>
+                    <span class="ticker">NVDA</span>
+                    <span class="sector">Technology · Semiconductors</span>
+                </div>
+                <div class="price-box">
+                    <span class="current-price">$223.96</span>
+                    <span class="market-cap">$5.42T</span>
+                </div>
+            </div>
+
+            <div class="metrics-grid">
+                <div class="metric-card">
+                    <div class="metric-title">밸류에이션</div>
+                    <div class="metric-item"><span class="metric-label">Trailing PER</span><span class="metric-value" style="color:#FF9800">34.2 (고평가)</span></div>
+                    <div class="metric-item"><span class="metric-label">Forward PER</span><span class="metric-value" style="color:#2196F3">17.4 (적정)</span></div>
+                    <div class="metric-item"><span class="metric-label">PBR</span><span class="metric-value">27.75</span></div>
+                    <div class="metric-item"><span class="metric-label">EPS</span><span class="metric-value">$6.54</span></div>
+                    <div class="metric-item"><span class="metric-label">Forward EPS</span><span class="metric-value">$12.89</span></div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-title">성장성</div>
+                    <div class="metric-item"><span class="metric-label">매출 성장률</span><span class="metric-value" style="color:#4CAF50">+85.2%</span></div><div class="metric-item"><span class="metric-label">이익 성장률</span><span class="metric-value" style="color:#4CAF50">+214.5%</span></div><div class="metric-item"><span class="metric-label">이익률</span><span class="metric-value">63.0%</span></div><div class="metric-item"><span class="metric-label">PEG</span><span class="metric-value" style="color:#4CAF50">0.62</span></div>
+                </div>
+            </div>
+
+            
+            <div class="w52-range">
+                <div class="w52-label"><span>$164</span><span>52주 범위</span><span>$237</span></div>
+                <div class="w52-bar"><div class="w52-fill" style="width:83%"></div><div class="w52-dot" style="left:83%"></div></div>
+            </div>
+
+            <div class="charts-row">
+                <div class="chart-box"><canvas id="priceChart1"></canvas></div>
+                <div class="chart-box"><canvas id="perChart1"></canvas></div>
+            </div>
+            <div class="charts-row">
+                <div class="chart-box"><canvas id="revenueChart1"></canvas></div>
+                <div class="chart-box"><canvas id="marginChart1"></canvas></div>
+            </div>
+        </div>
+        
+        <div class="stock-card">
+            <div class="card-header">
+                <div>
+                    <h2>Tesla, Inc.</h2>
+                    <span class="ticker">TSLA</span>
+                    <span class="sector">Consumer Cyclical · Auto Manufacturers</span>
+                </div>
+                <div class="price-box">
+                    <span class="current-price">$328.58</span>
+                    <span class="market-cap">$1.30T</span>
+                </div>
+            </div>
+
+            <div class="metrics-grid">
+                <div class="metric-card">
+                    <div class="metric-title">밸류에이션</div>
+                    <div class="metric-item"><span class="metric-label">Trailing PER</span><span class="metric-value" style="color:#F44336">304.2 (매우 고평가)</span></div>
+                    <div class="metric-item"><span class="metric-label">Forward PER</span><span class="metric-value" style="color:#F44336">148.1 (매우 고평가)</span></div>
+                    <div class="metric-item"><span class="metric-label">PBR</span><span class="metric-value">14.94</span></div>
+                    <div class="metric-item"><span class="metric-label">EPS</span><span class="metric-value">$1.08</span></div>
+                    <div class="metric-item"><span class="metric-label">Forward EPS</span><span class="metric-value">$2.22</span></div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-title">성장성</div>
+                    <div class="metric-item"><span class="metric-label">매출 성장률</span><span class="metric-value" style="color:#4CAF50">+25.5%</span></div><div class="metric-item"><span class="metric-label">이익 성장률</span><span class="metric-value" style="color:#F44336">-3.0%</span></div><div class="metric-item"><span class="metric-label">이익률</span><span class="metric-value">3.7%</span></div><div class="metric-item"><span class="metric-label">PEG</span><span class="metric-value" style="color:#F44336">4.81</span></div>
+                </div>
+            </div>
+
+            
+            <div class="w52-range">
+                <div class="w52-label"><span>$297</span><span>52주 범위</span><span>$499</span></div>
+                <div class="w52-bar"><div class="w52-fill" style="width:15%"></div><div class="w52-dot" style="left:15%"></div></div>
+            </div>
+
+            <div class="charts-row">
+                <div class="chart-box"><canvas id="priceChart2"></canvas></div>
+                <div class="chart-box"><canvas id="perChart2"></canvas></div>
+            </div>
+            <div class="charts-row">
+                <div class="chart-box"><canvas id="revenueChart2"></canvas></div>
+                <div class="chart-box"><canvas id="marginChart2"></canvas></div>
+            </div>
+        </div>
+        
+        <div class="stock-card">
+            <div class="card-header">
+                <div>
+                    <h2>Advanced Micro Devices, Inc.</h2>
+                    <span class="ticker">AMD</span>
+                    <span class="sector">Technology · Semiconductors</span>
+                </div>
+                <div class="price-box">
+                    <span class="current-price">$483.36</span>
+                    <span class="market-cap">$789.1B</span>
+                </div>
+            </div>
+
+            <div class="metrics-grid">
+                <div class="metric-card">
+                    <div class="metric-title">밸류에이션</div>
+                    <div class="metric-item"><span class="metric-label">Trailing PER</span><span class="metric-value" style="color:#F44336">123.3 (매우 고평가)</span></div>
+                    <div class="metric-item"><span class="metric-label">Forward PER</span><span class="metric-value" style="color:#FF9800">31.3 (고평가)</span></div>
+                    <div class="metric-item"><span class="metric-label">PBR</span><span class="metric-value">11.73</span></div>
+                    <div class="metric-item"><span class="metric-label">EPS</span><span class="metric-value">$3.92</span></div>
+                    <div class="metric-item"><span class="metric-label">Forward EPS</span><span class="metric-value">$15.46</span></div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-title">성장성</div>
+                    <div class="metric-item"><span class="metric-label">매출 성장률</span><span class="metric-value" style="color:#4CAF50">+50.1%</span></div><div class="metric-item"><span class="metric-label">이익 성장률</span><span class="metric-value" style="color:#4CAF50">+159.5%</span></div><div class="metric-item"><span class="metric-label">이익률</span><span class="metric-value">15.6%</span></div><div class="metric-item"><span class="metric-label">PEG</span><span class="metric-value" style="color:#2196F3">1.04</span></div>
+                </div>
+            </div>
+
+            
+            <div class="w52-range">
+                <div class="w52-label"><span>$149</span><span>52주 범위</span><span>$585</span></div>
+                <div class="w52-bar"><div class="w52-fill" style="width:77%"></div><div class="w52-dot" style="left:77%"></div></div>
+            </div>
+
+            <div class="charts-row">
+                <div class="chart-box"><canvas id="priceChart3"></canvas></div>
+                <div class="chart-box"><canvas id="perChart3"></canvas></div>
+            </div>
+            <div class="charts-row">
+                <div class="chart-box"><canvas id="revenueChart3"></canvas></div>
+                <div class="chart-box"><canvas id="marginChart3"></canvas></div>
+            </div>
+        </div>
+        
+        <div class="stock-card">
+            <div class="card-header">
+                <div>
+                    <h2>Microsoft Corporation</h2>
+                    <span class="ticker">MSFT</span>
+                    <span class="sector">Technology · Software - Infrastructure</span>
+                </div>
+                <div class="price-box">
+                    <span class="current-price">$499.99</span>
+                    <span class="market-cap">$3.71T</span>
+                </div>
+            </div>
+
+            <div class="metrics-grid">
+                <div class="metric-card">
+                    <div class="metric-title">밸류에이션</div>
+                    <div class="metric-item"><span class="metric-label">Trailing PER</span><span class="metric-value" style="color:#FF9800">27.9 (고평가)</span></div>
+                    <div class="metric-item"><span class="metric-label">Forward PER</span><span class="metric-value" style="color:#2196F3">21.3 (적정)</span></div>
+                    <div class="metric-item"><span class="metric-label">PBR</span><span class="metric-value">8.39</span></div>
+                    <div class="metric-item"><span class="metric-label">EPS</span><span class="metric-value">$17.95</span></div>
+                    <div class="metric-item"><span class="metric-label">Forward EPS</span><span class="metric-value">$23.47</span></div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-title">성장성</div>
+                    <div class="metric-item"><span class="metric-label">매출 성장률</span><span class="metric-value" style="color:#FF9800">+17.7%</span></div><div class="metric-item"><span class="metric-label">이익 성장률</span><span class="metric-value" style="color:#4CAF50">+31.7%</span></div><div class="metric-item"><span class="metric-label">이익률</span><span class="metric-value">40.3%</span></div><div class="metric-item"><span class="metric-label">PEG</span><span class="metric-value" style="color:#FF9800">1.63</span></div>
+                </div>
+            </div>
+
+            
+            <div class="w52-range">
+                <div class="w52-label"><span>$349</span><span>52주 범위</span><span>$554</span></div>
+                <div class="w52-bar"><div class="w52-fill" style="width:74%"></div><div class="w52-dot" style="left:74%"></div></div>
+            </div>
+
+            <div class="charts-row">
+                <div class="chart-box"><canvas id="priceChart4"></canvas></div>
+                <div class="chart-box"><canvas id="perChart4"></canvas></div>
+            </div>
+            <div class="charts-row">
+                <div class="chart-box"><canvas id="revenueChart4"></canvas></div>
+                <div class="chart-box"><canvas id="marginChart4"></canvas></div>
+            </div>
+        </div>
+        
+<script>
+Chart.defaults.color = '#aaa';
+Chart.defaults.borderColor = 'rgba(255,255,255,0.06)';
+
+        new Chart(document.getElementById('priceChart0'), {
+            type: 'line',
+            data: { datasets: [{ label: '주가 ($)', data: [{"x": "2025-08-08", "y": 186.96}, {"x": "2025-08-13", "y": 184.37}, {"x": "2025-08-18", "y": 174.03}, {"x": "2025-08-21", "y": 156.18}, {"x": "2025-08-26", "y": 160.87}, {"x": "2025-08-29", "y": 156.71}, {"x": "2025-09-04", "y": 156.14}, {"x": "2025-09-09", "y": 162.36}, {"x": "2025-09-12", "y": 171.43}, {"x": "2025-09-17", "y": 168.33}, {"x": "2025-09-22", "y": 179.33}, {"x": "2025-09-25", "y": 179.12}, {"x": "2025-09-30", "y": 182.42}, {"x": "2025-10-03", "y": 173.07}, {"x": "2025-10-08", "y": 183.56}, {"x": "2025-10-13", "y": 177.21}, {"x": "2025-10-16", "y": 178.12}, {"x": "2025-10-21", "y": 181.51}, {"x": "2025-10-24", "y": 184.63}, {"x": "2025-10-29", "y": 198.81}, {"x": "2025-11-03", "y": 207.18}, {"x": "2025-11-06", "y": 175.05}, {"x": "2025-11-11", "y": 190.96}, {"x": "2025-11-14", "y": 174.01}, {"x": "2025-11-19", "y": 165.42}, {"x": "2025-11-24", "y": 162.25}, {"x": "2025-11-28", "y": 168.45}, {"x": "2025-12-03", "y": 176.08}, {"x": "2025-12-08", "y": 181.49}, {"x": "2025-12-11", "y": 187.54}, {"x": "2025-12-16", "y": 187.75}, {"x": "2025-12-19", "y": 193.38}, {"x": "2025-12-24", "y": 194.17}, {"x": "2025-12-30", "y": 180.84}, {"x": "2026-01-05", "y": 174.04}, {"x": "2026-01-08", "y": 176.86}, {"x": "2026-01-13", "y": 178.96}, {"x": "2026-01-16", "y": 170.96}, {"x": "2026-01-22", "y": 165.9}, {"x": "2026-01-27", "y": 165.7}, {"x": "2026-01-30", "y": 146.59}, {"x": "2026-02-04", "y": 139.54}, {"x": "2026-02-09", "y": 142.91}, {"x": "2026-02-12", "y": 129.13}, {"x": "2026-02-18", "y": 135.38}, {"x": "2026-02-23", "y": 130.6}, {"x": "2026-02-26", "y": 135.94}, {"x": "2026-03-03", "y": 147.22}, {"x": "2026-03-06", "y": 157.16}, {"x": "2026-03-11", "y": 151.6}, {"x": "2026-03-16", "y": 152.72}, {"x": "2026-03-19", "y": 155.68}, {"x": "2026-03-24", "y": 154.78}, {"x": "2026-03-27", "y": 143.06}, {"x": "2026-04-01", "y": 146.49}, {"x": "2026-04-07", "y": 150.07}, {"x": "2026-04-10", "y": 128.06}, {"x": "2026-04-15", "y": 142.15}, {"x": "2026-04-20", "y": 145.89}, {"x": "2026-04-23", "y": 141.57}, {"x": "2026-04-28", "y": 141.18}, {"x": "2026-05-01", "y": 144.07}, {"x": "2026-05-06", "y": 133.79}, {"x": "2026-05-11", "y": 136.89}, {"x": "2026-05-14", "y": 133.73}, {"x": "2026-05-19", "y": 135.26}, {"x": "2026-05-22", "y": 136.88}, {"x": "2026-05-28", "y": 143.34}, {"x": "2026-06-02", "y": 152.17}, {"x": "2026-06-05", "y": 135.53}, {"x": "2026-06-10", "y": 130.21}, {"x": "2026-06-15", "y": 134.71}, {"x": "2026-06-18", "y": 128.47}, {"x": "2026-06-24", "y": 113.5}, {"x": "2026-06-29", "y": 115.7}, {"x": "2026-07-02", "y": 129.3}, {"x": "2026-07-08", "y": 132.22}, {"x": "2026-07-13", "y": 130.04}, {"x": "2026-07-16", "y": 134.44}, {"x": "2026-07-21", "y": 132.66}, {"x": "2026-07-24", "y": 122.92}, {"x": "2026-07-29", "y": 123.0}, {"x": "2026-08-03", "y": 125.65}, {"x": "2026-08-06", "y": 155.92}, {"x": "2026-08-07", "y": 172.01}], borderColor: '#1976D2', backgroundColor: 'rgba(25,118,210,0.1)', fill: true, tension: 0.3, pointRadius: 0 }] },
+            options: { responsive: true, plugins: { title: { display: true, text: '주가 추이 (1년)', font: { size: 14 } } }, scales: { x: { type: 'time', time: { unit: 'month' } } } }
+        });
+        new Chart(document.getElementById('perChart0'), {
+            type: 'line',
+            data: { datasets: [{ label: 'PER', data: [{"x": "2025-08-08", "y": 159.8}, {"x": "2025-08-13", "y": 157.6}, {"x": "2025-08-18", "y": 148.7}, {"x": "2025-08-21", "y": 133.5}, {"x": "2025-08-26", "y": 137.5}, {"x": "2025-08-29", "y": 133.9}, {"x": "2025-09-04", "y": 133.5}, {"x": "2025-09-09", "y": 138.8}, {"x": "2025-09-12", "y": 146.5}, {"x": "2025-09-17", "y": 143.9}, {"x": "2025-09-22", "y": 153.3}, {"x": "2025-09-25", "y": 153.1}, {"x": "2025-09-30", "y": 155.9}, {"x": "2025-10-03", "y": 147.9}, {"x": "2025-10-08", "y": 156.9}, {"x": "2025-10-13", "y": 151.5}, {"x": "2025-10-16", "y": 152.2}, {"x": "2025-10-21", "y": 155.1}, {"x": "2025-10-24", "y": 157.8}, {"x": "2025-10-29", "y": 169.9}, {"x": "2025-11-03", "y": 177.1}, {"x": "2025-11-06", "y": 149.6}, {"x": "2025-11-11", "y": 163.2}, {"x": "2025-11-14", "y": 148.7}, {"x": "2025-11-19", "y": 141.4}, {"x": "2025-11-24", "y": 138.7}, {"x": "2025-11-28", "y": 144.0}, {"x": "2025-12-03", "y": 150.5}, {"x": "2025-12-08", "y": 155.1}, {"x": "2025-12-11", "y": 160.3}, {"x": "2025-12-16", "y": 160.5}, {"x": "2025-12-19", "y": 165.3}, {"x": "2025-12-24", "y": 166.0}, {"x": "2025-12-30", "y": 154.6}, {"x": "2026-01-05", "y": 148.8}, {"x": "2026-01-08", "y": 151.2}, {"x": "2026-01-13", "y": 153.0}, {"x": "2026-01-16", "y": 146.1}, {"x": "2026-01-22", "y": 141.8}, {"x": "2026-01-27", "y": 141.6}, {"x": "2026-01-30", "y": 125.3}, {"x": "2026-02-04", "y": 119.3}, {"x": "2026-02-09", "y": 122.1}, {"x": "2026-02-12", "y": 110.4}, {"x": "2026-02-18", "y": 115.7}, {"x": "2026-02-23", "y": 111.6}, {"x": "2026-02-26", "y": 116.2}, {"x": "2026-03-03", "y": 125.8}, {"x": "2026-03-06", "y": 134.3}, {"x": "2026-03-11", "y": 129.6}, {"x": "2026-03-16", "y": 130.5}, {"x": "2026-03-19", "y": 133.1}, {"x": "2026-03-24", "y": 132.3}, {"x": "2026-03-27", "y": 122.3}, {"x": "2026-04-01", "y": 125.2}, {"x": "2026-04-07", "y": 128.3}, {"x": "2026-04-10", "y": 109.5}, {"x": "2026-04-15", "y": 121.5}, {"x": "2026-04-20", "y": 124.7}, {"x": "2026-04-23", "y": 121.0}, {"x": "2026-04-28", "y": 120.7}, {"x": "2026-05-01", "y": 123.1}, {"x": "2026-05-06", "y": 114.4}, {"x": "2026-05-11", "y": 117.0}, {"x": "2026-05-14", "y": 114.3}, {"x": "2026-05-19", "y": 115.6}, {"x": "2026-05-22", "y": 117.0}, {"x": "2026-05-28", "y": 122.5}, {"x": "2026-06-02", "y": 130.1}, {"x": "2026-06-05", "y": 115.8}, {"x": "2026-06-10", "y": 111.3}, {"x": "2026-06-15", "y": 115.1}, {"x": "2026-06-18", "y": 109.8}, {"x": "2026-06-24", "y": 97.0}, {"x": "2026-06-29", "y": 98.9}, {"x": "2026-07-02", "y": 110.5}, {"x": "2026-07-08", "y": 113.0}, {"x": "2026-07-13", "y": 111.1}, {"x": "2026-07-16", "y": 114.9}, {"x": "2026-07-21", "y": 113.4}, {"x": "2026-07-24", "y": 105.1}, {"x": "2026-07-29", "y": 105.1}, {"x": "2026-08-03", "y": 107.4}, {"x": "2026-08-06", "y": 133.3}, {"x": "2026-08-07", "y": 147.0}], borderColor: '#F44336', backgroundColor: 'rgba(244,67,54,0.1)', fill: true, tension: 0.3, pointRadius: 0 }] },
+            options: { responsive: true, plugins: { title: { display: true, text: 'PER 추이 (1년)', font: { size: 14 } }, annotation: { annotations: { line1: { type: 'line', yMin: 25, yMax: 25, borderColor: '#4CAF50', borderDash: [5,5], label: { content: 'S&P평균', display: true } } } } }, scales: { x: { type: 'time', time: { unit: 'month' } } } }
+        });
+        new Chart(document.getElementById('revenueChart0'), {
+            type: 'bar',
+            data: { labels: ["25/06", "25/09", "25/12", "26/03", "26/06"], datasets: [{ label: '매출 ($B)', data: [1.004, 1.181, 1.407, 1.633, 1.935], backgroundColor: 'rgba(25,118,210,0.8)' }, { label: '순이익 ($B)', data: [0.327, 0.476, 0.609, 0.871, 1.062], backgroundColor: 'rgba(76,175,80,0.8)' }] },
+            options: { responsive: true, plugins: { title: { display: true, text: '분기별 매출 & 순이익', font: { size: 14 } } } }
+        });
+        new Chart(document.getElementById('marginChart0'), {
+            type: 'bar',
+            data: { labels: ["25/06", "25/09", "25/12", "26/03", "26/06"], datasets: [{ label: '이익률 (%)', data: [32.6, 40.3, 43.3, 53.3, 54.9], backgroundColor: [32.6, 40.3, 43.3, 53.3, 54.9].map(v => v > 40 ? 'rgba(76,175,80,0.8)' : v > 20 ? 'rgba(255,193,7,0.8)' : 'rgba(244,67,54,0.8)') }] },
+            options: { responsive: true, plugins: { title: { display: true, text: '분기별 이익률', font: { size: 14 } } }, scales: { y: { beginAtZero: true, max: 70 } } }
+        });
+        
+        new Chart(document.getElementById('priceChart1'), {
+            type: 'line',
+            data: { datasets: [{ label: '주가 ($)', data: [{"x": "2025-08-08", "y": 182.46}, {"x": "2025-08-13", "y": 181.35}, {"x": "2025-08-18", "y": 181.77}, {"x": "2025-08-21", "y": 174.75}, {"x": "2025-08-26", "y": 181.53}, {"x": "2025-08-29", "y": 173.95}, {"x": "2025-09-04", "y": 171.43}, {"x": "2025-09-09", "y": 170.53}, {"x": "2025-09-12", "y": 177.59}, {"x": "2025-09-17", "y": 170.07}, {"x": "2025-09-22", "y": 183.38}, {"x": "2025-09-25", "y": 177.46}, {"x": "2025-09-30", "y": 186.34}, {"x": "2025-10-03", "y": 187.38}, {"x": "2025-10-08", "y": 188.87}, {"x": "2025-10-13", "y": 188.08}, {"x": "2025-10-16", "y": 181.58}, {"x": "2025-10-21", "y": 180.93}, {"x": "2025-10-24", "y": 186.02}, {"x": "2025-10-29", "y": 206.78}, {"x": "2025-11-03", "y": 206.62}, {"x": "2025-11-06", "y": 187.84}, {"x": "2025-11-11", "y": 192.91}, {"x": "2025-11-14", "y": 189.93}, {"x": "2025-11-19", "y": 186.28}, {"x": "2025-11-24", "y": 182.32}, {"x": "2025-11-28", "y": 176.77}, {"x": "2025-12-03", "y": 179.36}, {"x": "2025-12-08", "y": 185.32}, {"x": "2025-12-11", "y": 180.71}, {"x": "2025-12-16", "y": 177.5}, {"x": "2025-12-19", "y": 180.77}, {"x": "2025-12-24", "y": 188.38}, {"x": "2025-12-30", "y": 187.31}, {"x": "2026-01-05", "y": 187.89}, {"x": "2026-01-08", "y": 184.81}, {"x": "2026-01-13", "y": 185.58}, {"x": "2026-01-16", "y": 186.0}, {"x": "2026-01-22", "y": 184.61}, {"x": "2026-01-27", "y": 188.29}, {"x": "2026-01-30", "y": 190.9}, {"x": "2026-02-04", "y": 173.98}, {"x": "2026-02-09", "y": 189.81}, {"x": "2026-02-12", "y": 186.71}, {"x": "2026-02-18", "y": 187.75}, {"x": "2026-02-23", "y": 191.32}, {"x": "2026-02-26", "y": 184.66}, {"x": "2026-03-03", "y": 179.83}, {"x": "2026-03-06", "y": 177.6}, {"x": "2026-03-11", "y": 185.81}, {"x": "2026-03-16", "y": 183.01}, {"x": "2026-03-19", "y": 178.35}, {"x": "2026-03-24", "y": 175.0}, {"x": "2026-03-27", "y": 167.32}, {"x": "2026-04-01", "y": 175.55}, {"x": "2026-04-07", "y": 177.89}, {"x": "2026-04-10", "y": 188.41}, {"x": "2026-04-15", "y": 198.64}, {"x": "2026-04-20", "y": 201.82}, {"x": "2026-04-23", "y": 199.41}, {"x": "2026-04-28", "y": 212.92}, {"x": "2026-05-01", "y": 198.22}, {"x": "2026-05-06", "y": 207.59}, {"x": "2026-05-11", "y": 219.18}, {"x": "2026-05-14", "y": 235.47}, {"x": "2026-05-19", "y": 220.35}, {"x": "2026-05-22", "y": 215.08}, {"x": "2026-05-28", "y": 214.0}, {"x": "2026-06-02", "y": 222.56}, {"x": "2026-06-05", "y": 205.1}, {"x": "2026-06-10", "y": 200.42}, {"x": "2026-06-15", "y": 212.45}, {"x": "2026-06-18", "y": 210.69}, {"x": "2026-06-24", "y": 199.0}, {"x": "2026-06-29", "y": 194.97}, {"x": "2026-07-02", "y": 194.83}, {"x": "2026-07-08", "y": 204.12}, {"x": "2026-07-13", "y": 203.53}, {"x": "2026-07-16", "y": 207.4}, {"x": "2026-07-21", "y": 207.29}, {"x": "2026-07-24", "y": 206.84}, {"x": "2026-07-29", "y": 190.01}, {"x": "2026-08-03", "y": 206.64}, {"x": "2026-08-06", "y": 218.99}, {"x": "2026-08-07", "y": 223.96}], borderColor: '#1976D2', backgroundColor: 'rgba(25,118,210,0.1)', fill: true, tension: 0.3, pointRadius: 0 }] },
+            options: { responsive: true, plugins: { title: { display: true, text: '주가 추이 (1년)', font: { size: 14 } } }, scales: { x: { type: 'time', time: { unit: 'month' } } } }
+        });
+        new Chart(document.getElementById('perChart1'), {
+            type: 'line',
+            data: { datasets: [{ label: 'PER', data: [{"x": "2025-08-08", "y": 27.9}, {"x": "2025-08-13", "y": 27.7}, {"x": "2025-08-18", "y": 27.8}, {"x": "2025-08-21", "y": 26.7}, {"x": "2025-08-26", "y": 27.8}, {"x": "2025-08-29", "y": 26.6}, {"x": "2025-09-04", "y": 26.2}, {"x": "2025-09-09", "y": 26.1}, {"x": "2025-09-12", "y": 27.2}, {"x": "2025-09-17", "y": 26.0}, {"x": "2025-09-22", "y": 28.0}, {"x": "2025-09-25", "y": 27.1}, {"x": "2025-09-30", "y": 28.5}, {"x": "2025-10-03", "y": 28.7}, {"x": "2025-10-08", "y": 28.9}, {"x": "2025-10-13", "y": 28.8}, {"x": "2025-10-16", "y": 27.8}, {"x": "2025-10-21", "y": 27.7}, {"x": "2025-10-24", "y": 28.4}, {"x": "2025-10-29", "y": 31.6}, {"x": "2025-11-03", "y": 31.6}, {"x": "2025-11-06", "y": 28.7}, {"x": "2025-11-11", "y": 29.5}, {"x": "2025-11-14", "y": 29.0}, {"x": "2025-11-19", "y": 28.5}, {"x": "2025-11-24", "y": 27.9}, {"x": "2025-11-28", "y": 27.0}, {"x": "2025-12-03", "y": 27.4}, {"x": "2025-12-08", "y": 28.3}, {"x": "2025-12-11", "y": 27.6}, {"x": "2025-12-16", "y": 27.1}, {"x": "2025-12-19", "y": 27.6}, {"x": "2025-12-24", "y": 28.8}, {"x": "2025-12-30", "y": 28.6}, {"x": "2026-01-05", "y": 28.7}, {"x": "2026-01-08", "y": 28.3}, {"x": "2026-01-13", "y": 28.4}, {"x": "2026-01-16", "y": 28.4}, {"x": "2026-01-22", "y": 28.2}, {"x": "2026-01-27", "y": 28.8}, {"x": "2026-01-30", "y": 29.2}, {"x": "2026-02-04", "y": 26.6}, {"x": "2026-02-09", "y": 29.0}, {"x": "2026-02-12", "y": 28.5}, {"x": "2026-02-18", "y": 28.7}, {"x": "2026-02-23", "y": 29.3}, {"x": "2026-02-26", "y": 28.2}, {"x": "2026-03-03", "y": 27.5}, {"x": "2026-03-06", "y": 27.2}, {"x": "2026-03-11", "y": 28.4}, {"x": "2026-03-16", "y": 28.0}, {"x": "2026-03-19", "y": 27.3}, {"x": "2026-03-24", "y": 26.8}, {"x": "2026-03-27", "y": 25.6}, {"x": "2026-04-01", "y": 26.8}, {"x": "2026-04-07", "y": 27.2}, {"x": "2026-04-10", "y": 28.8}, {"x": "2026-04-15", "y": 30.4}, {"x": "2026-04-20", "y": 30.9}, {"x": "2026-04-23", "y": 30.5}, {"x": "2026-04-28", "y": 32.6}, {"x": "2026-05-01", "y": 30.3}, {"x": "2026-05-06", "y": 31.7}, {"x": "2026-05-11", "y": 33.5}, {"x": "2026-05-14", "y": 36.0}, {"x": "2026-05-19", "y": 33.7}, {"x": "2026-05-22", "y": 32.9}, {"x": "2026-05-28", "y": 32.7}, {"x": "2026-06-02", "y": 34.0}, {"x": "2026-06-05", "y": 31.4}, {"x": "2026-06-10", "y": 30.6}, {"x": "2026-06-15", "y": 32.5}, {"x": "2026-06-18", "y": 32.2}, {"x": "2026-06-24", "y": 30.4}, {"x": "2026-06-29", "y": 29.8}, {"x": "2026-07-02", "y": 29.8}, {"x": "2026-07-08", "y": 31.2}, {"x": "2026-07-13", "y": 31.1}, {"x": "2026-07-16", "y": 31.7}, {"x": "2026-07-21", "y": 31.7}, {"x": "2026-07-24", "y": 31.6}, {"x": "2026-07-29", "y": 29.1}, {"x": "2026-08-03", "y": 31.6}, {"x": "2026-08-06", "y": 33.5}, {"x": "2026-08-07", "y": 34.2}], borderColor: '#F44336', backgroundColor: 'rgba(244,67,54,0.1)', fill: true, tension: 0.3, pointRadius: 0 }] },
+            options: { responsive: true, plugins: { title: { display: true, text: 'PER 추이 (1년)', font: { size: 14 } }, annotation: { annotations: { line1: { type: 'line', yMin: 25, yMax: 25, borderColor: '#4CAF50', borderDash: [5,5], label: { content: 'S&P평균', display: true } } } } }, scales: { x: { type: 'time', time: { unit: 'month' } } } }
+        });
+        new Chart(document.getElementById('revenueChart1'), {
+            type: 'bar',
+            data: { labels: ["25/04", "25/07", "25/10", "26/01", "26/04"], datasets: [{ label: '매출 ($B)', data: [44.062, 46.743, 57.006, 68.127, 81.615], backgroundColor: 'rgba(25,118,210,0.8)' }, { label: '순이익 ($B)', data: [18.775, 26.422, 31.91, 42.96, 58.321], backgroundColor: 'rgba(76,175,80,0.8)' }] },
+            options: { responsive: true, plugins: { title: { display: true, text: '분기별 매출 & 순이익', font: { size: 14 } } } }
+        });
+        new Chart(document.getElementById('marginChart1'), {
+            type: 'bar',
+            data: { labels: ["25/04", "25/07", "25/10", "26/01", "26/04"], datasets: [{ label: '이익률 (%)', data: [42.6, 56.5, 56.0, 63.1, 71.5], backgroundColor: [42.6, 56.5, 56.0, 63.1, 71.5].map(v => v > 40 ? 'rgba(76,175,80,0.8)' : v > 20 ? 'rgba(255,193,7,0.8)' : 'rgba(244,67,54,0.8)') }] },
+            options: { responsive: true, plugins: { title: { display: true, text: '분기별 이익률', font: { size: 14 } } }, scales: { y: { beginAtZero: true, max: 70 } } }
+        });
+        
+        new Chart(document.getElementById('priceChart2'), {
+            type: 'line',
+            data: { datasets: [{ label: '주가 ($)', data: [{"x": "2025-08-08", "y": 329.65}, {"x": "2025-08-13", "y": 339.38}, {"x": "2025-08-18", "y": 335.16}, {"x": "2025-08-21", "y": 320.11}, {"x": "2025-08-26", "y": 351.67}, {"x": "2025-08-29", "y": 333.87}, {"x": "2025-09-04", "y": 338.53}, {"x": "2025-09-09", "y": 346.97}, {"x": "2025-09-12", "y": 395.94}, {"x": "2025-09-17", "y": 425.86}, {"x": "2025-09-22", "y": 434.21}, {"x": "2025-09-25", "y": 423.39}, {"x": "2025-09-30", "y": 444.72}, {"x": "2025-10-03", "y": 429.83}, {"x": "2025-10-08", "y": 438.69}, {"x": "2025-10-13", "y": 435.9}, {"x": "2025-10-16", "y": 428.75}, {"x": "2025-10-21", "y": 442.6}, {"x": "2025-10-24", "y": 433.72}, {"x": "2025-10-29", "y": 461.51}, {"x": "2025-11-03", "y": 468.37}, {"x": "2025-11-06", "y": 445.91}, {"x": "2025-11-11", "y": 439.62}, {"x": "2025-11-14", "y": 404.35}, {"x": "2025-11-19", "y": 403.99}, {"x": "2025-11-24", "y": 417.78}, {"x": "2025-11-28", "y": 430.17}, {"x": "2025-12-03", "y": 446.74}, {"x": "2025-12-08", "y": 439.58}, {"x": "2025-12-11", "y": 446.89}, {"x": "2025-12-16", "y": 489.88}, {"x": "2025-12-19", "y": 481.2}, {"x": "2025-12-24", "y": 485.4}, {"x": "2025-12-30", "y": 454.43}, {"x": "2026-01-05", "y": 451.67}, {"x": "2026-01-08", "y": 435.8}, {"x": "2026-01-13", "y": 447.2}, {"x": "2026-01-16", "y": 437.5}, {"x": "2026-01-22", "y": 449.36}, {"x": "2026-01-27", "y": 430.9}, {"x": "2026-01-30", "y": 430.41}, {"x": "2026-02-04", "y": 406.01}, {"x": "2026-02-09", "y": 417.32}, {"x": "2026-02-12", "y": 417.07}, {"x": "2026-02-18", "y": 411.32}, {"x": "2026-02-23", "y": 399.83}, {"x": "2026-02-26", "y": 408.58}, {"x": "2026-03-03", "y": 392.43}, {"x": "2026-03-06", "y": 396.73}, {"x": "2026-03-11", "y": 407.82}, {"x": "2026-03-16", "y": 395.56}, {"x": "2026-03-19", "y": 380.3}, {"x": "2026-03-24", "y": 383.03}, {"x": "2026-03-27", "y": 361.83}, {"x": "2026-04-01", "y": 381.26}, {"x": "2026-04-07", "y": 346.65}, {"x": "2026-04-10", "y": 348.95}, {"x": "2026-04-15", "y": 391.95}, {"x": "2026-04-20", "y": 392.5}, {"x": "2026-04-23", "y": 373.72}, {"x": "2026-04-28", "y": 376.02}, {"x": "2026-05-01", "y": 390.82}, {"x": "2026-05-06", "y": 398.73}, {"x": "2026-05-11", "y": 445.0}, {"x": "2026-05-14", "y": 443.3}, {"x": "2026-05-19", "y": 404.11}, {"x": "2026-05-22", "y": 426.01}, {"x": "2026-05-28", "y": 442.1}, {"x": "2026-06-02", "y": 423.74}, {"x": "2026-06-05", "y": 391.0}, {"x": "2026-06-10", "y": 381.59}, {"x": "2026-06-15", "y": 411.15}, {"x": "2026-06-18", "y": 400.49}, {"x": "2026-06-24", "y": 375.53}, {"x": "2026-06-29", "y": 411.84}, {"x": "2026-07-02", "y": 393.45}, {"x": "2026-07-08", "y": 394.06}, {"x": "2026-07-13", "y": 394.76}, {"x": "2026-07-16", "y": 391.06}, {"x": "2026-07-21", "y": 378.93}, {"x": "2026-07-24", "y": 313.03}, {"x": "2026-07-29", "y": 298.32}, {"x": "2026-08-03", "y": 322.08}, {"x": "2026-08-06", "y": 319.53}, {"x": "2026-08-07", "y": 328.58}], borderColor: '#1976D2', backgroundColor: 'rgba(25,118,210,0.1)', fill: true, tension: 0.3, pointRadius: 0 }] },
+            options: { responsive: true, plugins: { title: { display: true, text: '주가 추이 (1년)', font: { size: 14 } } }, scales: { x: { type: 'time', time: { unit: 'month' } } } }
+        });
+        new Chart(document.getElementById('perChart2'), {
+            type: 'line',
+            data: { datasets: [{ label: 'PER', data: [{"x": "2025-08-08", "y": 305.2}, {"x": "2025-08-13", "y": 314.2}, {"x": "2025-08-18", "y": 310.3}, {"x": "2025-08-21", "y": 296.4}, {"x": "2025-08-26", "y": 325.6}, {"x": "2025-08-29", "y": 309.1}, {"x": "2025-09-04", "y": 313.5}, {"x": "2025-09-09", "y": 321.3}, {"x": "2025-09-12", "y": 366.6}, {"x": "2025-09-17", "y": 394.3}, {"x": "2025-09-22", "y": 402.0}, {"x": "2025-09-25", "y": 392.0}, {"x": "2025-09-30", "y": 411.8}, {"x": "2025-10-03", "y": 398.0}, {"x": "2025-10-08", "y": 406.2}, {"x": "2025-10-13", "y": 403.6}, {"x": "2025-10-16", "y": 397.0}, {"x": "2025-10-21", "y": 409.8}, {"x": "2025-10-24", "y": 401.6}, {"x": "2025-10-29", "y": 427.3}, {"x": "2025-11-03", "y": 433.7}, {"x": "2025-11-06", "y": 412.9}, {"x": "2025-11-11", "y": 407.1}, {"x": "2025-11-14", "y": 374.4}, {"x": "2025-11-19", "y": 374.1}, {"x": "2025-11-24", "y": 386.8}, {"x": "2025-11-28", "y": 398.3}, {"x": "2025-12-03", "y": 413.6}, {"x": "2025-12-08", "y": 407.0}, {"x": "2025-12-11", "y": 413.8}, {"x": "2025-12-16", "y": 453.6}, {"x": "2025-12-19", "y": 445.6}, {"x": "2025-12-24", "y": 449.4}, {"x": "2025-12-30", "y": 420.8}, {"x": "2026-01-05", "y": 418.2}, {"x": "2026-01-08", "y": 403.5}, {"x": "2026-01-13", "y": 414.1}, {"x": "2026-01-16", "y": 405.1}, {"x": "2026-01-22", "y": 416.1}, {"x": "2026-01-27", "y": 399.0}, {"x": "2026-01-30", "y": 398.5}, {"x": "2026-02-04", "y": 375.9}, {"x": "2026-02-09", "y": 386.4}, {"x": "2026-02-12", "y": 386.2}, {"x": "2026-02-18", "y": 380.9}, {"x": "2026-02-23", "y": 370.2}, {"x": "2026-02-26", "y": 378.3}, {"x": "2026-03-03", "y": 363.4}, {"x": "2026-03-06", "y": 367.3}, {"x": "2026-03-11", "y": 377.6}, {"x": "2026-03-16", "y": 366.3}, {"x": "2026-03-19", "y": 352.1}, {"x": "2026-03-24", "y": 354.7}, {"x": "2026-03-27", "y": 335.0}, {"x": "2026-04-01", "y": 353.0}, {"x": "2026-04-07", "y": 321.0}, {"x": "2026-04-10", "y": 323.1}, {"x": "2026-04-15", "y": 362.9}, {"x": "2026-04-20", "y": 363.4}, {"x": "2026-04-23", "y": 346.0}, {"x": "2026-04-28", "y": 348.2}, {"x": "2026-05-01", "y": 361.9}, {"x": "2026-05-06", "y": 369.2}, {"x": "2026-05-11", "y": 412.0}, {"x": "2026-05-14", "y": 410.5}, {"x": "2026-05-19", "y": 374.2}, {"x": "2026-05-22", "y": 394.5}, {"x": "2026-05-28", "y": 409.4}, {"x": "2026-06-02", "y": 392.4}, {"x": "2026-06-05", "y": 362.0}, {"x": "2026-06-10", "y": 353.3}, {"x": "2026-06-15", "y": 380.7}, {"x": "2026-06-18", "y": 370.8}, {"x": "2026-06-24", "y": 347.7}, {"x": "2026-06-29", "y": 381.3}, {"x": "2026-07-02", "y": 364.3}, {"x": "2026-07-08", "y": 364.9}, {"x": "2026-07-13", "y": 365.5}, {"x": "2026-07-16", "y": 362.1}, {"x": "2026-07-21", "y": 350.9}, {"x": "2026-07-24", "y": 289.8}, {"x": "2026-07-29", "y": 276.2}, {"x": "2026-08-03", "y": 298.2}, {"x": "2026-08-06", "y": 295.9}, {"x": "2026-08-07", "y": 304.2}], borderColor: '#F44336', backgroundColor: 'rgba(244,67,54,0.1)', fill: true, tension: 0.3, pointRadius: 0 }] },
+            options: { responsive: true, plugins: { title: { display: true, text: 'PER 추이 (1년)', font: { size: 14 } }, annotation: { annotations: { line1: { type: 'line', yMin: 25, yMax: 25, borderColor: '#4CAF50', borderDash: [5,5], label: { content: 'S&P평균', display: true } } } } }, scales: { x: { type: 'time', time: { unit: 'month' } } } }
+        });
+        new Chart(document.getElementById('revenueChart2'), {
+            type: 'bar',
+            data: { labels: ["24/12", "25/03", "25/06", "25/09", "25/12", "26/03", "26/06"], datasets: [{ label: '매출 ($B)', data: [NaN, NaN, 22.496, 28.095, 24.901, 22.387, 28.236], backgroundColor: 'rgba(25,118,210,0.8)' }, { label: '순이익 ($B)', data: [NaN, NaN, 1.172, 1.373, 0.84, 0.477, 1.114], backgroundColor: 'rgba(76,175,80,0.8)' }] },
+            options: { responsive: true, plugins: { title: { display: true, text: '분기별 매출 & 순이익', font: { size: 14 } } } }
+        });
+        new Chart(document.getElementById('marginChart2'), {
+            type: 'bar',
+            data: { labels: ["24/12", "25/03", "25/06", "25/09", "25/12", "26/03", "26/06"], datasets: [{ label: '이익률 (%)', data: [NaN, NaN, 5.2, 4.9, 3.4, 2.1, 3.9], backgroundColor: [NaN, NaN, 5.2, 4.9, 3.4, 2.1, 3.9].map(v => v > 40 ? 'rgba(76,175,80,0.8)' : v > 20 ? 'rgba(255,193,7,0.8)' : 'rgba(244,67,54,0.8)') }] },
+            options: { responsive: true, plugins: { title: { display: true, text: '분기별 이익률', font: { size: 14 } } }, scales: { y: { beginAtZero: true, max: 70 } } }
+        });
+        
+        new Chart(document.getElementById('priceChart3'), {
+            type: 'line',
+            data: { datasets: [{ label: '주가 ($)', data: [{"x": "2025-08-08", "y": 172.76}, {"x": "2025-08-13", "y": 184.42}, {"x": "2025-08-18", "y": 176.14}, {"x": "2025-08-21", "y": 163.71}, {"x": "2025-08-26", "y": 166.62}, {"x": "2025-08-29", "y": 162.63}, {"x": "2025-09-04", "y": 161.79}, {"x": "2025-09-09", "y": 155.82}, {"x": "2025-09-12", "y": 158.57}, {"x": "2025-09-17", "y": 159.16}, {"x": "2025-09-22", "y": 159.79}, {"x": "2025-09-25", "y": 161.27}, {"x": "2025-09-30", "y": 161.79}, {"x": "2025-10-03", "y": 164.67}, {"x": "2025-10-08", "y": 235.56}, {"x": "2025-10-13", "y": 216.42}, {"x": "2025-10-16", "y": 234.56}, {"x": "2025-10-21", "y": 238.03}, {"x": "2025-10-24", "y": 252.92}, {"x": "2025-10-29", "y": 264.33}, {"x": "2025-11-03", "y": 259.65}, {"x": "2025-11-06", "y": 237.7}, {"x": "2025-11-11", "y": 237.52}, {"x": "2025-11-14", "y": 246.81}, {"x": "2025-11-19", "y": 223.55}, {"x": "2025-11-24", "y": 215.05}, {"x": "2025-11-28", "y": 217.53}, {"x": "2025-12-03", "y": 217.6}, {"x": "2025-12-08", "y": 221.11}, {"x": "2025-12-11", "y": 221.43}, {"x": "2025-12-16", "y": 209.17}, {"x": "2025-12-19", "y": 213.43}, {"x": "2025-12-24", "y": 215.04}, {"x": "2025-12-30", "y": 215.34}, {"x": "2026-01-05", "y": 221.08}, {"x": "2026-01-08", "y": 204.68}, {"x": "2026-01-13", "y": 220.97}, {"x": "2026-01-16", "y": 231.83}, {"x": "2026-01-22", "y": 253.73}, {"x": "2026-01-27", "y": 252.03}, {"x": "2026-01-30", "y": 236.73}, {"x": "2026-02-04", "y": 200.19}, {"x": "2026-02-09", "y": 216.0}, {"x": "2026-02-12", "y": 205.94}, {"x": "2026-02-18", "y": 200.12}, {"x": "2026-02-23", "y": 196.6}, {"x": "2026-02-26", "y": 203.68}, {"x": "2026-03-03", "y": 190.95}, {"x": "2026-03-06", "y": 192.43}, {"x": "2026-03-11", "y": 204.83}, {"x": "2026-03-16", "y": 196.58}, {"x": "2026-03-19", "y": 205.27}, {"x": "2026-03-24", "y": 205.37}, {"x": "2026-03-27", "y": 201.99}, {"x": "2026-04-01", "y": 210.21}, {"x": "2026-04-07", "y": 221.53}, {"x": "2026-04-10", "y": 245.04}, {"x": "2026-04-15", "y": 258.12}, {"x": "2026-04-20", "y": 274.95}, {"x": "2026-04-23", "y": 305.33}, {"x": "2026-04-28", "y": 323.21}, {"x": "2026-05-01", "y": 360.54}, {"x": "2026-05-06", "y": 421.39}, {"x": "2026-05-11", "y": 458.79}, {"x": "2026-05-14", "y": 449.7}, {"x": "2026-05-19", "y": 414.05}, {"x": "2026-05-22", "y": 467.51}, {"x": "2026-05-28", "y": 518.09}, {"x": "2026-06-02", "y": 521.54}, {"x": "2026-06-05", "y": 466.38}, {"x": "2026-06-10", "y": 452.4}, {"x": "2026-06-15", "y": 547.26}, {"x": "2026-06-18", "y": 537.37}, {"x": "2026-06-24", "y": 519.74}, {"x": "2026-06-29", "y": 539.49}, {"x": "2026-07-02", "y": 517.82}, {"x": "2026-07-08", "y": 517.41}, {"x": "2026-07-13", "y": 534.39}, {"x": "2026-07-16", "y": 500.94}, {"x": "2026-07-21", "y": 544.43}, {"x": "2026-07-24", "y": 521.95}, {"x": "2026-07-29", "y": 429.56}, {"x": "2026-08-03", "y": 484.64}, {"x": "2026-08-06", "y": 489.28}, {"x": "2026-08-07", "y": 483.36}], borderColor: '#1976D2', backgroundColor: 'rgba(25,118,210,0.1)', fill: true, tension: 0.3, pointRadius: 0 }] },
+            options: { responsive: true, plugins: { title: { display: true, text: '주가 추이 (1년)', font: { size: 14 } } }, scales: { x: { type: 'time', time: { unit: 'month' } } } }
+        });
+        new Chart(document.getElementById('perChart3'), {
+            type: 'line',
+            data: { datasets: [{ label: 'PER', data: [{"x": "2025-08-08", "y": 44.1}, {"x": "2025-08-13", "y": 47.0}, {"x": "2025-08-18", "y": 44.9}, {"x": "2025-08-21", "y": 41.8}, {"x": "2025-08-26", "y": 42.5}, {"x": "2025-08-29", "y": 41.5}, {"x": "2025-09-04", "y": 41.3}, {"x": "2025-09-09", "y": 39.8}, {"x": "2025-09-12", "y": 40.5}, {"x": "2025-09-17", "y": 40.6}, {"x": "2025-09-22", "y": 40.8}, {"x": "2025-09-25", "y": 41.1}, {"x": "2025-09-30", "y": 41.3}, {"x": "2025-10-03", "y": 42.0}, {"x": "2025-10-08", "y": 60.1}, {"x": "2025-10-13", "y": 55.2}, {"x": "2025-10-16", "y": 59.8}, {"x": "2025-10-21", "y": 60.7}, {"x": "2025-10-24", "y": 64.5}, {"x": "2025-10-29", "y": 67.4}, {"x": "2025-11-03", "y": 66.2}, {"x": "2025-11-06", "y": 60.6}, {"x": "2025-11-11", "y": 60.6}, {"x": "2025-11-14", "y": 63.0}, {"x": "2025-11-19", "y": 57.0}, {"x": "2025-11-24", "y": 54.9}, {"x": "2025-11-28", "y": 55.5}, {"x": "2025-12-03", "y": 55.5}, {"x": "2025-12-08", "y": 56.4}, {"x": "2025-12-11", "y": 56.5}, {"x": "2025-12-16", "y": 53.4}, {"x": "2025-12-19", "y": 54.4}, {"x": "2025-12-24", "y": 54.9}, {"x": "2025-12-30", "y": 54.9}, {"x": "2026-01-05", "y": 56.4}, {"x": "2026-01-08", "y": 52.2}, {"x": "2026-01-13", "y": 56.4}, {"x": "2026-01-16", "y": 59.1}, {"x": "2026-01-22", "y": 64.7}, {"x": "2026-01-27", "y": 64.3}, {"x": "2026-01-30", "y": 60.4}, {"x": "2026-02-04", "y": 51.1}, {"x": "2026-02-09", "y": 55.1}, {"x": "2026-02-12", "y": 52.5}, {"x": "2026-02-18", "y": 51.1}, {"x": "2026-02-23", "y": 50.2}, {"x": "2026-02-26", "y": 52.0}, {"x": "2026-03-03", "y": 48.7}, {"x": "2026-03-06", "y": 49.1}, {"x": "2026-03-11", "y": 52.3}, {"x": "2026-03-16", "y": 50.1}, {"x": "2026-03-19", "y": 52.4}, {"x": "2026-03-24", "y": 52.4}, {"x": "2026-03-27", "y": 51.5}, {"x": "2026-04-01", "y": 53.6}, {"x": "2026-04-07", "y": 56.5}, {"x": "2026-04-10", "y": 62.5}, {"x": "2026-04-15", "y": 65.8}, {"x": "2026-04-20", "y": 70.1}, {"x": "2026-04-23", "y": 77.9}, {"x": "2026-04-28", "y": 82.5}, {"x": "2026-05-01", "y": 92.0}, {"x": "2026-05-06", "y": 107.5}, {"x": "2026-05-11", "y": 117.0}, {"x": "2026-05-14", "y": 114.7}, {"x": "2026-05-19", "y": 105.6}, {"x": "2026-05-22", "y": 119.3}, {"x": "2026-05-28", "y": 132.2}, {"x": "2026-06-02", "y": 133.0}, {"x": "2026-06-05", "y": 119.0}, {"x": "2026-06-10", "y": 115.4}, {"x": "2026-06-15", "y": 139.6}, {"x": "2026-06-18", "y": 137.1}, {"x": "2026-06-24", "y": 132.6}, {"x": "2026-06-29", "y": 137.6}, {"x": "2026-07-02", "y": 132.1}, {"x": "2026-07-08", "y": 132.0}, {"x": "2026-07-13", "y": 136.3}, {"x": "2026-07-16", "y": 127.8}, {"x": "2026-07-21", "y": 138.9}, {"x": "2026-07-24", "y": 133.2}, {"x": "2026-07-29", "y": 109.6}, {"x": "2026-08-03", "y": 123.6}, {"x": "2026-08-06", "y": 124.8}, {"x": "2026-08-07", "y": 123.3}], borderColor: '#F44336', backgroundColor: 'rgba(244,67,54,0.1)', fill: true, tension: 0.3, pointRadius: 0 }] },
+            options: { responsive: true, plugins: { title: { display: true, text: 'PER 추이 (1년)', font: { size: 14 } }, annotation: { annotations: { line1: { type: 'line', yMin: 25, yMax: 25, borderColor: '#4CAF50', borderDash: [5,5], label: { content: 'S&P평균', display: true } } } } }, scales: { x: { type: 'time', time: { unit: 'month' } } } }
+        });
+        new Chart(document.getElementById('revenueChart3'), {
+            type: 'bar',
+            data: { labels: ["24/12", "25/06", "25/09", "25/12", "26/03", "26/06"], datasets: [{ label: '매출 ($B)', data: [NaN, 7.685, 9.246, 10.27, 10.253, 11.536], backgroundColor: 'rgba(25,118,210,0.8)' }, { label: '순이익 ($B)', data: [NaN, 0.872, 1.243, 1.511, 1.383, 2.297], backgroundColor: 'rgba(76,175,80,0.8)' }] },
+            options: { responsive: true, plugins: { title: { display: true, text: '분기별 매출 & 순이익', font: { size: 14 } } } }
+        });
+        new Chart(document.getElementById('marginChart3'), {
+            type: 'bar',
+            data: { labels: ["24/12", "25/06", "25/09", "25/12", "26/03", "26/06"], datasets: [{ label: '이익률 (%)', data: [NaN, 11.3, 13.4, 14.7, 13.5, 19.9], backgroundColor: [NaN, 11.3, 13.4, 14.7, 13.5, 19.9].map(v => v > 40 ? 'rgba(76,175,80,0.8)' : v > 20 ? 'rgba(255,193,7,0.8)' : 'rgba(244,67,54,0.8)') }] },
+            options: { responsive: true, plugins: { title: { display: true, text: '분기별 이익률', font: { size: 14 } } }, scales: { y: { beginAtZero: true, max: 70 } } }
+        });
+        
+        new Chart(document.getElementById('priceChart4'), {
+            type: 'line',
+            data: { datasets: [{ label: '주가 ($)', data: [{"x": "2025-08-08", "y": 517.9}, {"x": "2025-08-13", "y": 516.45}, {"x": "2025-08-18", "y": 513.0}, {"x": "2025-08-21", "y": 501.07}, {"x": "2025-08-26", "y": 498.88}, {"x": "2025-08-29", "y": 503.5}, {"x": "2025-09-04", "y": 504.77}, {"x": "2025-09-09", "y": 495.27}, {"x": "2025-09-12", "y": 506.69}, {"x": "2025-09-17", "y": 506.81}, {"x": "2025-09-22", "y": 511.21}, {"x": "2025-09-25", "y": 503.84}, {"x": "2025-09-30", "y": 514.69}, {"x": "2025-10-03", "y": 514.09}, {"x": "2025-10-08", "y": 521.55}, {"x": "2025-10-13", "y": 510.81}, {"x": "2025-10-16", "y": 508.39}, {"x": "2025-10-21", "y": 514.4}, {"x": "2025-10-24", "y": 520.31}, {"x": "2025-10-29", "y": 538.14}, {"x": "2025-11-03", "y": 513.78}, {"x": "2025-11-06", "y": 493.97}, {"x": "2025-11-11", "y": 505.48}, {"x": "2025-11-14", "y": 506.97}, {"x": "2025-11-19", "y": 484.05}, {"x": "2025-11-24", "y": 471.9}, {"x": "2025-11-28", "y": 489.83}, {"x": "2025-12-03", "y": 475.61}, {"x": "2025-12-08", "y": 488.84}, {"x": "2025-12-11", "y": 481.33}, {"x": "2025-12-16", "y": 474.28}, {"x": "2025-12-19", "y": 483.77}, {"x": "2025-12-24", "y": 485.86}, {"x": "2025-12-30", "y": 485.32}, {"x": "2026-01-05", "y": 470.75}, {"x": "2026-01-08", "y": 475.99}, {"x": "2026-01-13", "y": 468.58}, {"x": "2026-01-16", "y": 457.82}, {"x": "2026-01-22", "y": 449.14}, {"x": "2026-01-27", "y": 478.45}, {"x": "2026-01-30", "y": 428.38}, {"x": "2026-02-04", "y": 412.35}, {"x": "2026-02-09", "y": 411.77}, {"x": "2026-02-12", "y": 400.06}, {"x": "2026-02-18", "y": 397.83}, {"x": "2026-02-23", "y": 383.64}, {"x": "2026-02-26", "y": 400.85}, {"x": "2026-03-03", "y": 403.06}, {"x": "2026-03-06", "y": 408.08}, {"x": "2026-03-11", "y": 404.0}, {"x": "2026-03-16", "y": 399.09}, {"x": "2026-03-19", "y": 388.18}, {"x": "2026-03-24", "y": 371.93}, {"x": "2026-03-27", "y": 356.0}, {"x": "2026-04-01", "y": 368.57}, {"x": "2026-04-07", "y": 371.49}, {"x": "2026-04-10", "y": 370.07}, {"x": "2026-04-15", "y": 410.33}, {"x": "2026-04-20", "y": 417.17}, {"x": "2026-04-23", "y": 414.85}, {"x": "2026-04-28", "y": 428.32}, {"x": "2026-05-01", "y": 413.54}, {"x": "2026-05-06", "y": 413.07}, {"x": "2026-05-11", "y": 411.77}, {"x": "2026-05-14", "y": 408.55}, {"x": "2026-05-19", "y": 416.52}, {"x": "2026-05-22", "y": 418.57}, {"x": "2026-05-28", "y": 426.99}, {"x": "2026-06-02", "y": 441.31}, {"x": "2026-06-05", "y": 416.67}, {"x": "2026-06-10", "y": 397.36}, {"x": "2026-06-15", "y": 399.76}, {"x": "2026-06-18", "y": 379.4}, {"x": "2026-06-24", "y": 365.46}, {"x": "2026-06-29", "y": 368.57}, {"x": "2026-07-02", "y": 390.49}, {"x": "2026-07-08", "y": 383.34}, {"x": "2026-07-13", "y": 390.99}, {"x": "2026-07-16", "y": 401.1}, {"x": "2026-07-21", "y": 397.75}, {"x": "2026-07-24", "y": 381.7}, {"x": "2026-07-29", "y": 390.54}, {"x": "2026-08-03", "y": 487.65}, {"x": "2026-08-06", "y": 499.86}, {"x": "2026-08-07", "y": 499.99}], borderColor: '#1976D2', backgroundColor: 'rgba(25,118,210,0.1)', fill: true, tension: 0.3, pointRadius: 0 }] },
+            options: { responsive: true, plugins: { title: { display: true, text: '주가 추이 (1년)', font: { size: 14 } } }, scales: { x: { type: 'time', time: { unit: 'month' } } } }
+        });
+        new Chart(document.getElementById('perChart4'), {
+            type: 'line',
+            data: { datasets: [{ label: 'PER', data: [{"x": "2025-08-08", "y": 28.9}, {"x": "2025-08-13", "y": 28.8}, {"x": "2025-08-18", "y": 28.6}, {"x": "2025-08-21", "y": 27.9}, {"x": "2025-08-26", "y": 27.8}, {"x": "2025-08-29", "y": 28.1}, {"x": "2025-09-04", "y": 28.1}, {"x": "2025-09-09", "y": 27.6}, {"x": "2025-09-12", "y": 28.2}, {"x": "2025-09-17", "y": 28.2}, {"x": "2025-09-22", "y": 28.5}, {"x": "2025-09-25", "y": 28.1}, {"x": "2025-09-30", "y": 28.7}, {"x": "2025-10-03", "y": 28.6}, {"x": "2025-10-08", "y": 29.1}, {"x": "2025-10-13", "y": 28.5}, {"x": "2025-10-16", "y": 28.3}, {"x": "2025-10-21", "y": 28.7}, {"x": "2025-10-24", "y": 29.0}, {"x": "2025-10-29", "y": 30.0}, {"x": "2025-11-03", "y": 28.6}, {"x": "2025-11-06", "y": 27.5}, {"x": "2025-11-11", "y": 28.2}, {"x": "2025-11-14", "y": 28.2}, {"x": "2025-11-19", "y": 27.0}, {"x": "2025-11-24", "y": 26.3}, {"x": "2025-11-28", "y": 27.3}, {"x": "2025-12-03", "y": 26.5}, {"x": "2025-12-08", "y": 27.2}, {"x": "2025-12-11", "y": 26.8}, {"x": "2025-12-16", "y": 26.4}, {"x": "2025-12-19", "y": 27.0}, {"x": "2025-12-24", "y": 27.1}, {"x": "2025-12-30", "y": 27.0}, {"x": "2026-01-05", "y": 26.2}, {"x": "2026-01-08", "y": 26.5}, {"x": "2026-01-13", "y": 26.1}, {"x": "2026-01-16", "y": 25.5}, {"x": "2026-01-22", "y": 25.0}, {"x": "2026-01-27", "y": 26.7}, {"x": "2026-01-30", "y": 23.9}, {"x": "2026-02-04", "y": 23.0}, {"x": "2026-02-09", "y": 22.9}, {"x": "2026-02-12", "y": 22.3}, {"x": "2026-02-18", "y": 22.2}, {"x": "2026-02-23", "y": 21.4}, {"x": "2026-02-26", "y": 22.3}, {"x": "2026-03-03", "y": 22.5}, {"x": "2026-03-06", "y": 22.7}, {"x": "2026-03-11", "y": 22.5}, {"x": "2026-03-16", "y": 22.2}, {"x": "2026-03-19", "y": 21.6}, {"x": "2026-03-24", "y": 20.7}, {"x": "2026-03-27", "y": 19.8}, {"x": "2026-04-01", "y": 20.5}, {"x": "2026-04-07", "y": 20.7}, {"x": "2026-04-10", "y": 20.6}, {"x": "2026-04-15", "y": 22.9}, {"x": "2026-04-20", "y": 23.2}, {"x": "2026-04-23", "y": 23.1}, {"x": "2026-04-28", "y": 23.9}, {"x": "2026-05-01", "y": 23.0}, {"x": "2026-05-06", "y": 23.0}, {"x": "2026-05-11", "y": 22.9}, {"x": "2026-05-14", "y": 22.8}, {"x": "2026-05-19", "y": 23.2}, {"x": "2026-05-22", "y": 23.3}, {"x": "2026-05-28", "y": 23.8}, {"x": "2026-06-02", "y": 24.6}, {"x": "2026-06-05", "y": 23.2}, {"x": "2026-06-10", "y": 22.1}, {"x": "2026-06-15", "y": 22.3}, {"x": "2026-06-18", "y": 21.1}, {"x": "2026-06-24", "y": 20.4}, {"x": "2026-06-29", "y": 20.5}, {"x": "2026-07-02", "y": 21.8}, {"x": "2026-07-08", "y": 21.4}, {"x": "2026-07-13", "y": 21.8}, {"x": "2026-07-16", "y": 22.3}, {"x": "2026-07-21", "y": 22.2}, {"x": "2026-07-24", "y": 21.3}, {"x": "2026-07-29", "y": 21.8}, {"x": "2026-08-03", "y": 27.2}, {"x": "2026-08-06", "y": 27.8}, {"x": "2026-08-07", "y": 27.9}], borderColor: '#F44336', backgroundColor: 'rgba(244,67,54,0.1)', fill: true, tension: 0.3, pointRadius: 0 }] },
+            options: { responsive: true, plugins: { title: { display: true, text: 'PER 추이 (1년)', font: { size: 14 } }, annotation: { annotations: { line1: { type: 'line', yMin: 25, yMax: 25, borderColor: '#4CAF50', borderDash: [5,5], label: { content: 'S&P평균', display: true } } } } }, scales: { x: { type: 'time', time: { unit: 'month' } } } }
+        });
+        new Chart(document.getElementById('revenueChart4'), {
+            type: 'bar',
+            data: { labels: ["25/06", "25/09", "25/12", "26/03", "26/06"], datasets: [{ label: '매출 ($B)', data: [76.441, 77.673, 81.273, 82.886, 90.007], backgroundColor: 'rgba(25,118,210,0.8)' }, { label: '순이익 ($B)', data: [27.233, 27.747, 38.458, 31.778, 35.766], backgroundColor: 'rgba(76,175,80,0.8)' }] },
+            options: { responsive: true, plugins: { title: { display: true, text: '분기별 매출 & 순이익', font: { size: 14 } } } }
+        });
+        new Chart(document.getElementById('marginChart4'), {
+            type: 'bar',
+            data: { labels: ["25/06", "25/09", "25/12", "26/03", "26/06"], datasets: [{ label: '이익률 (%)', data: [35.6, 35.7, 47.3, 38.3, 39.7], backgroundColor: [35.6, 35.7, 47.3, 38.3, 39.7].map(v => v > 40 ? 'rgba(76,175,80,0.8)' : v > 20 ? 'rgba(255,193,7,0.8)' : 'rgba(244,67,54,0.8)') }] },
+            options: { responsive: true, plugins: { title: { display: true, text: '분기별 이익률', font: { size: 14 } } }, scales: { y: { beginAtZero: true, max: 70 } } }
+        });
+        
+</script>
+</body>
+</html>
