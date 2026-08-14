@@ -815,7 +815,10 @@ function renderStock(s, idx) {
 
   const div = document.createElement('div');
   div.className = 'stock-card';
-  const avatarLetter = (s.ticker || s.name || '?').split('.')[0].slice(0,2);
+  const rawTicker = (s.ticker || '').split('.')[0];
+  const avatarLetter = /^[0-9]+$/.test(rawTicker)
+    ? (s.name || rawTicker).slice(0, 1)
+    : (rawTicker || s.name || '?').slice(0, 2);
   div.innerHTML = `
     <div class="card-header">
       <div class="name-row">
