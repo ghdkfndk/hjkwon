@@ -505,10 +505,27 @@ function renderNews(s) {
 
 function renderSegmentDonut(s, idx) {
   const seg = s.segments;
-  if (!seg) return '<p style="color:#666;font-size:12px;text-align:center;padding:12px;">세그먼트 매출 데이터가 없습니다 (주요 기업만 지원)</p>';
+  if (!seg) return '';
   
   const total = seg.segments.reduce((sum, s) => sum + s.revenue, 0);
   const unit = seg.unit || '$M';
+  const isEstimated = seg.estimated;
+  
+  if (isEstimated) {
+    // 뉴스 추정: 숫자 없이 키워드만
+    return `<div style="margin-bottom:16px;">
+      <div style="text-align:center;margin-bottom:12px;">
+        <p style="color:#90CAF9;font-size:13px;font-weight:bold;">매출원 (뉴스 기반 추정)</p>
+        <p style="color:#666;font-size:11px;">${seg.period}</p>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center;">
+        ${seg.segments.map((s,i) => {
+          const colors = ['#1976D2','#4CAF50','#FF9800','#9C27B0','#F44336','#00BCD4'];
+          return `<span style="padding:6px 14px;background:${colors[i%6]}33;border:1px solid ${colors[i%6]};border-radius:16px;color:${colors[i%6]};font-size:13px;">📊 ${s.name}</span>`;
+        }).join('')}
+      </div>
+    </div>`;
+  }
   
   return `<div style="margin-bottom:16px;">
     <div style="text-align:center;margin-bottom:12px;">
@@ -520,20 +537,20 @@ function renderSegmentDonut(s, idx) {
       </div>
       <div style="flex:1;min-width:200px;">
         ${seg.segments.map((s,i) => {
-          const pct = (s.revenue / total * 100).toFixed(0);
+          const pct = total > 0 ? (s.revenue / total * 100).toFixed(0) : '?';
           const colors = ['#1976D2','#4CAF50','#FF9800','#9C27B0','#F44336','#00BCD4','#795548','#607D8B'];
           return `<div style="display:flex;align-items:center;padding:4px 0;">
             <span style="width:10px;height:10px;background:${colors[i%8]};border-radius:50%;margin-right:8px;"></span>
             <span style="flex:1;color:#ddd;font-size:13px;">${s.name}</span>
-            <span style="color:#fff;font-weight:bold;font-size:13px;margin-right:8px;">${s.revenue.toLocaleString()}${unit}</span>
+            <span style="color:#fff;font-weight:bold;font-size:13px;margin-right:8px;">${s.revenue > 0 ? s.revenue.toLocaleString() + unit : ''}</span>
             <span style="color:#aaa;font-size:11px;width:35px;">${pct}%</span>
             <span style="color:${s.growth.includes('-')?'#F44336':'#4CAF50'};font-size:11px;">${s.growth}</span>
           </div>`;
         }).join('')}
-        <div style="border-top:1px solid rgba(255,255,255,0.1);margin-top:8px;padding-top:6px;display:flex;justify-content:space-between;">
+        ${total > 0 ? `<div style="border-top:1px solid rgba(255,255,255,0.1);margin-top:8px;padding-top:6px;display:flex;justify-content:space-between;">
           <span style="color:#90CAF9;font-size:12px;">합계</span>
           <span style="color:#fff;font-weight:bold;font-size:13px;">${total.toLocaleString()}${unit}</span>
-        </div>
+        </div>` : ''}
       </div>
     </div>
   </div>`;
@@ -864,29 +881,33 @@ def _fetch_news(ticker: str, name: str) -> list[dict]:
     news = []
 
     is_kr = ticker.endswith((".KS", ".KQ"))
+    search_name = name if _has_korean(name) else ticker.split(".")[0]
 
     if is_kr:
-        search_name = name if _has_korean(name) else ticker.split(".")[0]
         url = f"https://news.google.com/rss/search?q={quote(search_name)}&hl=ko&gl=KR&ceid=KR:ko"
-        try:
-            req = Request(url, headers={"User-Agent": "Mozilla/5.0"})
-            with urlopen(req, timeout=10) as resp:
-                tree = ElementTree.parse(resp)
-            for item in list(tree.iter("item"))[:8]:
-                title = (item.findtext("title") or "").strip()
-                link = (item.findtext("link") or "").strip()
-                pub = (item.findtext("pubDate") or "").strip()
-                source = title.split(" - ")[-1] if " - " in title else ""
-                headline = title.rsplit(" - ", 1)[0] if " - " in title else title
-                if headline:
-                    news.append({"title": headline, "source": source, "link": link, "date": pub})
-        except Exception as e:
-            print(f"[WARN] Google News 실패: {e}")
     else:
+        url = f"https://news.google.com/rss/search?q={quote(search_name + ' stock earnings')}&hl=en&gl=US&ceid=US:en"
+
+    try:
+        req = Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with urlopen(req, timeout=10) as resp:
+            tree = ElementTree.parse(resp)
+        for item in list(tree.iter("item"))[:10]:
+            title = (item.findtext("title") or "").strip()
+            link = (item.findtext("link") or "").strip()
+            pub = (item.findtext("pubDate") or "").strip()
+            source = title.split(" - ")[-1] if " - " in title else ""
+            headline = title.rsplit(" - ", 1)[0] if " - " in title else title
+            if headline:
+                news.append({"title": headline, "source": source, "link": link, "date": pub})
+    except Exception as e:
+        print(f"[WARN] Google News 실패: {e}")
+
+    if not is_kr:
         try:
             stock = yf.Ticker(ticker)
             yf_news = stock.news or []
-            for n in yf_news[:8]:
+            for n in yf_news[:5]:
                 content = n.get("content", n)
                 title = content.get("title", "")
                 summary = content.get("summary", "")
@@ -895,13 +916,126 @@ def _fetch_news(ticker: str, name: str) -> list[dict]:
                 link_data = content.get("canonicalUrl", content.get("clickThroughUrl", {}))
                 link = link_data.get("url", "") if isinstance(link_data, dict) else ""
                 pub = content.get("pubDate", "")
-                if title:
+                if title and not any(n2["title"] == title for n2 in news):
                     news.append({"title": title, "source": source, "link": link,
                                  "date": pub, "summary": summary})
         except Exception as e:
             print(f"[WARN] Yahoo News 실패: {e}")
 
     return news
+
+
+def _extract_segments_from_news(news: list[dict], name: str) -> dict | None:
+    """뉴스 제목에서 매출 세그먼트 정보를 추출한다."""
+    import re
+
+    all_text = " ".join(n["title"] + " " + n.get("summary", "") for n in news)
+
+    segment_patterns = {
+        "en": [
+            (r"(?:commercial|enterprise)\s+revenue[:\s]*\$?([\d,.]+)\s*(B|M|billion|million)", "Commercial"),
+            (r"(?:government|federal)\s+revenue[:\s]*\$?([\d,.]+)\s*(B|M|billion|million)", "Government"),
+            (r"(?:data\s*center|datacenter)\s+revenue[:\s]*\$?([\d,.]+)\s*(B|M|billion|million)", "Data Center"),
+            (r"(?:cloud|aws|azure)\s+revenue[:\s]*\$?([\d,.]+)\s*(B|M|billion|million)", "Cloud"),
+            (r"(?:gaming)\s+revenue[:\s]*\$?([\d,.]+)\s*(B|M|billion|million)", "Gaming"),
+            (r"(?:advertising|ad)\s+revenue[:\s]*\$?([\d,.]+)\s*(B|M|billion|million)", "Advertising"),
+            (r"(?:subscription|서브스크립션)\s+revenue[:\s]*\$?([\d,.]+)\s*(B|M|billion|million)", "Subscription"),
+            (r"(?:automotive|자동차)\s+revenue[:\s]*\$?([\d,.]+)\s*(B|M|billion|million)", "Automotive"),
+            (r"(?:services?)\s+revenue[:\s]*\$?([\d,.]+)\s*(B|M|billion|million)", "Services"),
+        ],
+        "kr": [
+            (r"(IVI|차량용|자동차)\s*(?:칩|반도체)?\s*매출\s*([\d,.]+)\s*(억|조)", "차량용 반도체"),
+            (r"(로봇|로보틱스)\s*(?:사업|부문)?\s*매출\s*([\d,.]+)\s*(억|조)", "로봇"),
+            (r"(게이트웨이|통신)\s*(?:칩|사업)?\s*매출\s*([\d,.]+)\s*(억|조)", "네트워크 게이트웨이"),
+            (r"(반도체|칩)\s*(?:사업|부문)?\s*매출\s*([\d,.]+)\s*(억|조)", "반도체"),
+            (r"(서비스|SW)\s*(?:사업|부문)?\s*매출\s*([\d,.]+)\s*(억|조)", "서비스/SW"),
+            (r"(광고)\s*(?:사업|부문)?\s*매출\s*([\d,.]+)\s*(억|조)", "광고"),
+            (r"(구독|콘텐츠)\s*(?:사업|부문)?\s*매출\s*([\d,.]+)\s*(억|조)", "구독/콘텐츠"),
+            (r"(플랫폼)\s*(?:사업|부문)?\s*매출\s*([\d,.]+)\s*(억|조)", "플랫폼"),
+            (r"(커머스|쇼핑)\s*(?:사업|부문)?\s*매출\s*([\d,.]+)\s*(억|조)", "커머스"),
+        ],
+    }
+
+    segments_found = []
+    text_lower = all_text.lower()
+
+    for pattern, seg_name in segment_patterns["en"]:
+        match = re.search(pattern, text_lower, re.IGNORECASE)
+        if match:
+            val_str = match.group(1).replace(",", "")
+            unit = match.group(2)
+            val = float(val_str)
+            if unit.lower() in ("b", "billion"):
+                val *= 1000
+            segments_found.append({"name": seg_name, "revenue": val, "growth": ""})
+
+    for pattern, seg_name in segment_patterns["kr"]:
+        match = re.search(pattern, all_text)
+        if match:
+            groups = match.groups()
+            if len(groups) >= 3:
+                val_str = groups[1].replace(",", "")
+                unit = groups[2]
+                val = float(val_str)
+                if unit == "조":
+                    val *= 10000
+                segments_found.append({"name": seg_name, "revenue": val, "growth": ""})
+
+    # 뉴스 제목에서 성장률도 추출
+    growth_pattern = re.compile(r"(\w+)\s+revenue\s+(?:jumps?|soars?|grows?|up)\s+(\d+)%", re.IGNORECASE)
+    for match in growth_pattern.finditer(all_text):
+        seg = match.group(1).title()
+        pct = match.group(2)
+        for s in segments_found:
+            if seg.lower() in s["name"].lower():
+                s["growth"] = f"+{pct}% YoY"
+
+    if not segments_found:
+        # 키워드 기반 추정 (정확한 숫자 없이)
+        biz_keywords = {
+            "en": {
+                "data center": "Data Center", "cloud": "Cloud", "gaming": "Gaming",
+                "advertising": "Advertising", "automotive": "Automotive",
+                "subscription": "Subscription", "enterprise": "Enterprise",
+                "consumer": "Consumer", "hardware": "Hardware", "software": "Software",
+            },
+            "kr": {
+                "자동차": "자동차", "반도체": "반도체", "로봇": "로봇", "AI": "AI",
+                "클라우드": "클라우드", "광고": "광고", "게임": "게임",
+                "배터리": "배터리", "디스플레이": "디스플레이", "바이오": "바이오",
+                "플랫폼": "플랫폼", "커머스": "커머스", "핀테크": "핀테크",
+                "콘텐츠": "콘텐츠", "물류": "물류",
+            },
+        }
+        found_biz = []
+        for kw, label in biz_keywords["en"].items():
+            if kw in text_lower:
+                found_biz.append(label)
+        for kw, label in biz_keywords["kr"].items():
+            if kw in all_text:
+                found_biz.append(label)
+
+        if found_biz:
+            return {
+                "name": name,
+                "segments": [{"name": b, "revenue": 0, "growth": ""} for b in list(dict.fromkeys(found_biz))[:6]],
+                "unit": "",
+                "period": "뉴스 기반 추정",
+                "estimated": True,
+            }
+        return None
+
+    if segments_found:
+        is_kr = any(s["name"] in ("차량용 반도체", "로봇", "네트워크 게이트웨이") for s in segments_found)
+        return {
+            "name": name,
+            "segments": segments_found,
+            "unit": "억원" if is_kr else "$M",
+            "period": "최근 실적",
+            "estimated": False,
+        }
+
+    return None
 
 
 def _analyze_company_direction(news: list[dict], name: str) -> dict:
@@ -1140,6 +1274,13 @@ def fetch_stock(raw_ticker: str) -> dict | None:
         result["news"] = news_list[:6]
         result["direction"] = direction
         print(f"[INFO] {display_name} 뉴스 {len(news_list)}건, 전망: {direction['outlook']}")
+
+        # 사전 데이터 없으면 뉴스에서 세그먼트 추출 시도
+        if not result["segments"] and news_list:
+            extracted = _extract_segments_from_news(news_list, display_name)
+            if extracted:
+                result["segments"] = extracted
+                print(f"[INFO] {display_name} 뉴스에서 세그먼트 {len(extracted['segments'])}개 추출")
 
         return result
     except Exception as e:
