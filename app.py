@@ -419,10 +419,8 @@ function renderRevenueStructure(s, idx) {
   if (!rs || !rs.length) return '';
   const latest = rs[0];
   const unit = latest.unit || '$B';
-  const curr = s.currency || 'USD';
-  const sym = curr === 'KRW' ? '₩' : '$';
 
-  // 연도별 성장률
+  // 성장률 뱃지
   let growthHtml = '';
   if (rs.length >= 2) {
     const cur = rs[0], prev = rs[1];
@@ -437,70 +435,8 @@ function renderRevenueStructure(s, idx) {
     </div>`;
   }
 
-  // Sankey 스타일 현금흐름 다이어그램 (HTML/CSS로 구현)
-  const rev = latest.revenue;
-  const cogs = latest.cost_of_revenue;
-  const gross = latest.gross_profit;
-  const sga = latest.sga;
-  const rnd = latest.rnd;
-  const oi = latest.operating_income;
-  const ni = latest.net_income;
-  const gm = latest.gross_margin;
-  const om = latest.operating_margin;
-  const nm = latest.net_margin;
-
-  const fmtVal = (v) => v ? v.toFixed(1) + unit : 'N/A';
-  const barPct = (v) => Math.max(2, Math.min(95, v / rev * 100));
-
-  const flowHtml = `
-  <div style="margin:16px 0;">
-    <div style="display:flex;align-items:center;margin-bottom:4px;">
-      <span style="width:100px;font-size:12px;color:#90CAF9;text-align:right;padding-right:8px;">매출</span>
-      <div style="flex:1;height:32px;background:linear-gradient(90deg,#1976D2,#1565C0);border-radius:4px;display:flex;align-items:center;padding:0 12px;">
-        <span style="color:#fff;font-weight:bold;font-size:13px;">${fmtVal(rev)} (100%)</span>
-      </div>
-    </div>
-    <div style="display:flex;align-items:center;margin-bottom:4px;">
-      <span style="width:100px;font-size:12px;color:#EF9A9A;text-align:right;padding-right:8px;">매출원가</span>
-      <div style="width:${barPct(cogs)}%;height:24px;background:linear-gradient(90deg,#F44336,#D32F2F);border-radius:4px;display:flex;align-items:center;padding:0 12px;">
-        <span style="color:#fff;font-size:12px;">${fmtVal(cogs)} (${(cogs/rev*100).toFixed(0)}%)</span>
-      </div>
-    </div>
-    <div style="display:flex;align-items:center;margin-bottom:4px;">
-      <span style="width:100px;font-size:12px;color:#81C784;text-align:right;padding-right:8px;">매출총이익</span>
-      <div style="width:${barPct(gross)}%;height:28px;background:linear-gradient(90deg,#4CAF50,#388E3C);border-radius:4px;display:flex;align-items:center;padding:0 12px;">
-        <span style="color:#fff;font-weight:bold;font-size:12px;">${fmtVal(gross)} (${gm}% 마진)</span>
-      </div>
-    </div>
-    <div style="padding-left:100px;margin:8px 0 4px;border-left:2px solid rgba(76,175,80,0.3);margin-left:100px;">
-      <div style="display:flex;align-items:center;margin-bottom:3px;">
-        <span style="width:80px;font-size:11px;color:#FFB74D;padding-right:8px;">판매&마케팅</span>
-        <div style="width:${barPct(sga-rnd > 0 ? sga-rnd : sga)}%;height:18px;background:#FF9800;border-radius:3px;display:flex;align-items:center;padding:0 8px;">
-          <span style="color:#fff;font-size:11px;">${fmtVal(sga > rnd ? sga-rnd : sga)}</span>
-        </div>
-      </div>
-      <div style="display:flex;align-items:center;margin-bottom:3px;">
-        <span style="width:80px;font-size:11px;color:#CE93D8;padding-right:8px;">R&D</span>
-        <div style="width:${barPct(rnd)}%;height:18px;background:#9C27B0;border-radius:3px;display:flex;align-items:center;padding:0 8px;">
-          <span style="color:#fff;font-size:11px;">${fmtVal(rnd)}</span>
-        </div>
-      </div>
-    </div>
-    <div style="display:flex;align-items:center;margin-bottom:4px;">
-      <span style="width:100px;font-size:12px;color:#64B5F6;text-align:right;padding-right:8px;">영업이익</span>
-      <div style="width:${barPct(oi)}%;height:28px;background:linear-gradient(90deg,#2196F3,#1565C0);border-radius:4px;display:flex;align-items:center;padding:0 12px;">
-        <span style="color:#fff;font-weight:bold;font-size:12px;">${fmtVal(oi)} (${om}% 마진)</span>
-      </div>
-    </div>
-    <div style="display:flex;align-items:center;">
-      <span style="width:100px;font-size:12px;color:#A5D6A7;text-align:right;padding-right:8px;">순이익</span>
-      <div style="width:${barPct(ni)}%;height:28px;background:linear-gradient(90deg,#66BB6A,#2E7D32);border-radius:4px;display:flex;align-items:center;padding:0 12px;">
-        <span style="color:#fff;font-weight:bold;font-size:12px;">${fmtVal(ni)} (${nm}% 마진)</span>
-      </div>
-    </div>
-  </div>`;
-
   // 연도별 테이블
+  const fmtVal = (v) => v ? v.toFixed(1) + unit : 'N/A';
   let tableRows = rs.map(y => `
     <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
       <td style="padding:6px 8px;color:#90CAF9;font-weight:bold;">${y.year}</td>
@@ -513,7 +449,18 @@ function renderRevenueStructure(s, idx) {
   return `<div class="direction-box">
     <div class="direction-title" style="margin-bottom:8px;">💰 수익 구조 (${latest.year})</div>
     ${growthHtml}
-    ${flowHtml}
+    <div class="charts-grid">
+      <div class="chart-wrap" style="text-align:center;">
+        <p style="color:#90CAF9;font-size:13px;font-weight:bold;margin-bottom:8px;">매출 구성</p>
+        <canvas id="donut1_${idx}"></canvas>
+        <p style="color:#aaa;font-size:12px;margin-top:8px;">매출 ${fmtVal(latest.revenue)}</p>
+      </div>
+      <div class="chart-wrap" style="text-align:center;">
+        <p style="color:#90CAF9;font-size:13px;font-weight:bold;margin-bottom:8px;">매출총이익 구성</p>
+        <canvas id="donut2_${idx}"></canvas>
+        <p style="color:#aaa;font-size:12px;margin-top:8px;">매출총이익 ${fmtVal(latest.gross_profit)}</p>
+      </div>
+    </div>
     <table style="width:100%;margin:16px 0;border-collapse:collapse;font-size:13px;">
       <tr style="border-bottom:1px solid rgba(255,255,255,0.15);">
         <th style="padding:8px;text-align:left;color:#90CAF9;">연도</th>
@@ -649,20 +596,76 @@ function renderStock(s, idx) {
     const latest = rs[0];
     const unit = latest.unit || '$B';
 
+    // 도넛 1: 매출 = 매출원가 + 매출총이익
+    new Chart(document.getElementById('donut1_'+idx), {
+      type: 'doughnut',
+      data: {
+        labels: ['매출원가 ('+((latest.cost_of_revenue/latest.revenue)*100).toFixed(0)+'%)', '매출총이익 ('+latest.gross_margin+'%)'],
+        datasets: [{
+          data: [latest.cost_of_revenue, latest.gross_profit],
+          backgroundColor: ['#F44336', '#4CAF50'],
+          borderWidth: 2,
+          borderColor: 'rgba(0,0,0,0.3)',
+        }]
+      },
+      options: {
+        responsive: true,
+        cutout: '55%',
+        plugins: {
+          legend: { position: 'bottom', labels: { font: { size: 12 }, padding: 12 } },
+          tooltip: { callbacks: { label: (ctx) => ctx.label + ': ' + ctx.parsed.toFixed(1) + unit } }
+        }
+      }
+    });
+
+    // 도넛 2: 매출총이익 = 판매마케팅 + R&D + 영업이익(→순이익)
+    const smExp = latest.sga > latest.rnd ? latest.sga - latest.rnd : latest.sga;
+    const otherExp = latest.operating_expense - latest.sga - latest.rnd;
+    const donut2Data = [];
+    const donut2Labels = [];
+    const donut2Colors = [];
+
+    if (smExp > 0) { donut2Labels.push('판매&마케팅'); donut2Data.push(smExp); donut2Colors.push('#FF9800'); }
+    if (latest.rnd > 0) { donut2Labels.push('R&D'); donut2Data.push(latest.rnd); donut2Colors.push('#9C27B0'); }
+    if (otherExp > 0) { donut2Labels.push('기타 비용'); donut2Data.push(otherExp); donut2Colors.push('#607D8B'); }
+    if (latest.net_income > 0) { donut2Labels.push('순이익 ('+latest.net_margin+'%)'); donut2Data.push(latest.net_income); donut2Colors.push('#2196F3'); }
+    else if (latest.operating_income > 0) { donut2Labels.push('영업이익'); donut2Data.push(latest.operating_income); donut2Colors.push('#2196F3'); }
+
+    new Chart(document.getElementById('donut2_'+idx), {
+      type: 'doughnut',
+      data: {
+        labels: donut2Labels,
+        datasets: [{
+          data: donut2Data,
+          backgroundColor: donut2Colors,
+          borderWidth: 2,
+          borderColor: 'rgba(0,0,0,0.3)',
+        }]
+      },
+      options: {
+        responsive: true,
+        cutout: '55%',
+        plugins: {
+          legend: { position: 'bottom', labels: { font: { size: 12 }, padding: 12 } },
+          tooltip: { callbacks: { label: (ctx) => ctx.label + ': ' + ctx.parsed.toFixed(1) + unit } }
+        }
+      }
+    });
+
     // 워터폴 차트
-    const wfLabels = ['매출', '매출원가', '매출총이익', '판관비', '영업이익', '순이익'];
-    const wfData = [latest.revenue, latest.cost_of_revenue, latest.gross_profit,
-      latest.sga + latest.rnd, latest.operating_income, latest.net_income];
-    const wfColors = ['#1976D2','#F44336','#4CAF50','#FF9800','#2196F3','#8BC34A'];
+    const wfLabels2 = ['매출', '매출원가', '매출총이익', '판관비', 'R&D', '영업이익', '순이익'];
+    const wfData2 = [latest.revenue, latest.cost_of_revenue, latest.gross_profit,
+      latest.sga, latest.rnd, latest.operating_income, latest.net_income];
+    const wfColors2 = ['#1976D2','#F44336','#4CAF50','#FF9800','#9C27B0','#2196F3','#66BB6A'];
 
     new Chart(document.getElementById('waterfall_'+idx), {
       type: 'bar',
       data: {
-        labels: wfLabels,
+        labels: wfLabels2,
         datasets: [{
           label: unit,
-          data: wfData,
-          backgroundColor: wfColors,
+          data: wfData2,
+          backgroundColor: wfColors2,
           borderRadius: 4,
         }]
       },
