@@ -770,11 +770,11 @@ function renderStock(s, idx) {
           datasets: [{
             data: seg.segments.map(s => s.revenue),
             backgroundColor: segColors.slice(0, seg.segments.length),
-            borderWidth: 3,
-            borderColor: 'rgba(15,12,41,0.8)',
-            hoverBorderColor: '#fff',
+            borderWidth: 0,
+            hoverBorderColor: 'rgba(255,255,255,0.8)',
             hoverBorderWidth: 2,
             hoverOffset: 12,
+            spacing: 2,
           }]
         },
         options: {
@@ -797,11 +797,11 @@ function renderStock(s, idx) {
     // 도넛 중앙 텍스트 플러그인
 
     const donutStyle = {
-      borderWidth: 3,
-      borderColor: 'rgba(15,12,41,0.8)',
-      hoverBorderColor: '#fff',
+      borderWidth: 0,
+      hoverBorderColor: 'rgba(255,255,255,0.8)',
       hoverBorderWidth: 2,
       hoverOffset: 12,
+      spacing: 2,
     };
 
     // 도넛 1: 매출 = 매출원가 + 매출총이익
