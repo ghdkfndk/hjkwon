@@ -40,6 +40,95 @@ POPULAR_KR = [
 KR_NAME_MAP = {code: name for code, name in POPULAR_KR}
 KR_NAME_TO_CODE = {name: code for code, name in POPULAR_KR}
 
+SEGMENT_DATA = {
+    "PLTR": {
+        "name": "Palantir",
+        "segments": [
+            {"name": "Commercial", "revenue": 945, "growth": "+110% YoY"},
+            {"name": "Government", "revenue": 990, "growth": "+79% YoY"},
+        ],
+        "unit": "$M",
+        "period": "Q2 2026",
+    },
+    "AMZN": {
+        "name": "Amazon",
+        "segments": [
+            {"name": "Online Stores", "revenue": 75600, "growth": "+7% YoY"},
+            {"name": "3rd Party Sellers", "revenue": 47500, "growth": "+9% YoY"},
+            {"name": "AWS", "revenue": 28800, "growth": "+19% YoY"},
+            {"name": "Advertising", "revenue": 17300, "growth": "+18% YoY"},
+            {"name": "Subscription", "revenue": 11500, "growth": "+10% YoY"},
+            {"name": "Physical Stores", "revenue": 5600, "growth": "+8% YoY"},
+        ],
+        "unit": "$M",
+        "period": "Q4 2024",
+    },
+    "AAPL": {
+        "name": "Apple",
+        "segments": [
+            {"name": "iPhone", "revenue": 69700, "growth": "+6% YoY"},
+            {"name": "Services", "revenue": 26300, "growth": "+14% YoY"},
+            {"name": "Mac", "revenue": 9000, "growth": "+15% YoY"},
+            {"name": "iPad", "revenue": 8100, "growth": "+15% YoY"},
+            {"name": "Wearables/Home", "revenue": 11700, "growth": "+2% YoY"},
+        ],
+        "unit": "$M",
+        "period": "Q1 2025",
+    },
+    "GOOGL": {
+        "name": "Alphabet",
+        "segments": [
+            {"name": "Search & Other", "revenue": 54700, "growth": "+12% YoY"},
+            {"name": "YouTube Ads", "revenue": 10500, "growth": "+14% YoY"},
+            {"name": "Google Cloud", "revenue": 12000, "growth": "+30% YoY"},
+            {"name": "Network", "revenue": 8300, "growth": "+5% YoY"},
+            {"name": "Other Bets", "revenue": 400, "growth": ""},
+        ],
+        "unit": "$M",
+        "period": "Q4 2024",
+    },
+    "MSFT": {
+        "name": "Microsoft",
+        "segments": [
+            {"name": "Intelligent Cloud (Azure)", "revenue": 25500, "growth": "+21% YoY"},
+            {"name": "Productivity (Office/LinkedIn)", "revenue": 22400, "growth": "+14% YoY"},
+            {"name": "Personal Computing (Windows/Xbox)", "revenue": 16900, "growth": "+17% YoY"},
+        ],
+        "unit": "$M",
+        "period": "Q2 2025",
+    },
+    "META": {
+        "name": "Meta",
+        "segments": [
+            {"name": "Family of Apps (광고)", "revenue": 46700, "growth": "+21% YoY"},
+            {"name": "Reality Labs (VR/AR)", "revenue": 1100, "growth": "-12% YoY"},
+        ],
+        "unit": "$M",
+        "period": "Q4 2024",
+    },
+    "NVDA": {
+        "name": "NVIDIA",
+        "segments": [
+            {"name": "Data Center", "revenue": 35100, "growth": "+93% YoY"},
+            {"name": "Gaming", "revenue": 3600, "growth": "+9% YoY"},
+            {"name": "Automotive", "revenue": 570, "growth": "+55% YoY"},
+            {"name": "Professional Visualization", "revenue": 490, "growth": "+10% YoY"},
+        ],
+        "unit": "$M",
+        "period": "Q3 2025",
+    },
+    "TSLA": {
+        "name": "Tesla",
+        "segments": [
+            {"name": "Automotive Sales", "revenue": 20000, "growth": "-6% YoY"},
+            {"name": "Energy & Storage", "revenue": 2400, "growth": "+52% YoY"},
+            {"name": "Services & Other", "revenue": 2800, "growth": "+13% YoY"},
+        ],
+        "unit": "$M",
+        "period": "Q3 2024",
+    },
+}
+
 
 def _search_yahoo(query: str, prefer_kr: bool = False) -> str | None:
     """Yahoo Finance autocomplete로 티커를 검색한다."""
@@ -414,6 +503,42 @@ function renderNews(s) {
   </div>`;
 }
 
+function renderSegmentDonut(s, idx) {
+  const seg = s.segments;
+  if (!seg) return '<p style="color:#666;font-size:12px;text-align:center;padding:12px;">세그먼트 매출 데이터가 없습니다 (주요 기업만 지원)</p>';
+  
+  const total = seg.segments.reduce((sum, s) => sum + s.revenue, 0);
+  const unit = seg.unit || '$M';
+  
+  return `<div style="margin-bottom:16px;">
+    <div style="text-align:center;margin-bottom:12px;">
+      <p style="color:#90CAF9;font-size:13px;font-weight:bold;">매출 발생 구조 (${seg.period})</p>
+    </div>
+    <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;">
+      <div style="flex:1;min-width:200px;">
+        <canvas id="seg_donut_${idx}"></canvas>
+      </div>
+      <div style="flex:1;min-width:200px;">
+        ${seg.segments.map((s,i) => {
+          const pct = (s.revenue / total * 100).toFixed(0);
+          const colors = ['#1976D2','#4CAF50','#FF9800','#9C27B0','#F44336','#00BCD4','#795548','#607D8B'];
+          return `<div style="display:flex;align-items:center;padding:4px 0;">
+            <span style="width:10px;height:10px;background:${colors[i%8]};border-radius:50%;margin-right:8px;"></span>
+            <span style="flex:1;color:#ddd;font-size:13px;">${s.name}</span>
+            <span style="color:#fff;font-weight:bold;font-size:13px;margin-right:8px;">${s.revenue.toLocaleString()}${unit}</span>
+            <span style="color:#aaa;font-size:11px;width:35px;">${pct}%</span>
+            <span style="color:${s.growth.includes('-')?'#F44336':'#4CAF50'};font-size:11px;">${s.growth}</span>
+          </div>`;
+        }).join('')}
+        <div style="border-top:1px solid rgba(255,255,255,0.1);margin-top:8px;padding-top:6px;display:flex;justify-content:space-between;">
+          <span style="color:#90CAF9;font-size:12px;">합계</span>
+          <span style="color:#fff;font-weight:bold;font-size:13px;">${total.toLocaleString()}${unit}</span>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
 function renderRevenueStructure(s, idx) {
   const rs = s.revenue_structure;
   if (!rs || !rs.length) return '';
@@ -449,6 +574,7 @@ function renderRevenueStructure(s, idx) {
   return `<div class="direction-box">
     <div class="direction-title" style="margin-bottom:8px;">💰 수익 구조 (${latest.year})</div>
     ${growthHtml}
+    ${renderSegmentDonut(s, idx)}
     <div class="charts-grid">
       <div class="chart-wrap" style="text-align:center;">
         <p style="color:#90CAF9;font-size:13px;font-weight:bold;margin-bottom:8px;">매출 구성</p>
@@ -595,6 +721,32 @@ function renderStock(s, idx) {
   if (rs && rs.length) {
     const latest = rs[0];
     const unit = latest.unit || '$B';
+
+    // 세그먼트 도넛 차트
+    const seg = s.segments;
+    if (seg && document.getElementById('seg_donut_'+idx)) {
+      const colors = ['#1976D2','#4CAF50','#FF9800','#9C27B0','#F44336','#00BCD4','#795548','#607D8B'];
+      new Chart(document.getElementById('seg_donut_'+idx), {
+        type: 'doughnut',
+        data: {
+          labels: seg.segments.map(s => s.name),
+          datasets: [{
+            data: seg.segments.map(s => s.revenue),
+            backgroundColor: colors.slice(0, seg.segments.length),
+            borderWidth: 2,
+            borderColor: 'rgba(0,0,0,0.3)',
+          }]
+        },
+        options: {
+          responsive: true,
+          cutout: '50%',
+          plugins: {
+            legend: { display: false },
+            tooltip: { callbacks: { label: (ctx) => ctx.label + ': ' + ctx.parsed.toLocaleString() + seg.unit + ' (' + (ctx.parsed / seg.segments.reduce((a,b)=>a+b.revenue,0) * 100).toFixed(0) + '%)' } }
+          }
+        }
+      });
+    }
 
     // 도넛 1: 매출 = 매출원가 + 매출총이익
     new Chart(document.getElementById('donut1_'+idx), {
@@ -977,6 +1129,10 @@ def fetch_stock(raw_ticker: str) -> dict | None:
             print(f"[WARN] 수익 구조 분석 실패: {e}")
 
         result["revenue_structure"] = revenue_structure
+
+        # 세그먼트별 매출
+        base_ticker = ticker.split(".")[0].upper()
+        result["segments"] = SEGMENT_DATA.get(base_ticker)
 
         print(f"[INFO] {display_name} 뉴스 수집 중...")
         news_list = _fetch_news(ticker, display_name)
