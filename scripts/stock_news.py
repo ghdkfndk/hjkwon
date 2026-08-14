@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+from __future__ import annotations
 """
 2단계 증시 분석 자동화 스크립트.
 
@@ -504,8 +505,10 @@ def build_report(
     news_items: list[dict],
     ticker_headlines: dict[str, list[str]],
     sentiment_data: list[dict],
+    chart_results: list[dict],
     fool_analysis: dict[str, list[dict]],
     fool_general: list[dict],
+    gh_repo: str = "",
 ) -> str:
     now = datetime.now(KST)
     date_str = now.strftime("%Y년 %m월 %d일 %H:%M KST")
@@ -516,6 +519,59 @@ def build_report(
         f"> 생성 시각: {date_str}",
         "",
     ]
+
+    # --- 결론 먼저 ---
+    if chart_results:
+        grade_emoji = {"A": "🟢", "B": "🔵", "C": "🟡", "D": "🟠", "F": "🔴"}
+        sorted_by_score = sorted(chart_results, key=lambda x: x.get("score", 0), reverse=True)
+
+        lines.append("## 🏆 오늘의 결론")
+        lines.append("")
+
+        best = sorted_by_score[0]
+        worst = sorted_by_score[-1]
+        best_emoji = grade_emoji.get(best.get("grade", "C"), "⚪")
+        worst_emoji = grade_emoji.get(worst.get("grade", "C"), "⚪")
+        lines.append(
+            f"> {best_emoji} **가장 유망**: {best['name']}({best['ticker']}) "
+            f"— 스코어 {best.get('score', '-')}점"
+        )
+        if len(sorted_by_score) > 1:
+            lines.append(
+                f"> {worst_emoji} **가장 주의**: {worst['name']}({worst['ticker']}) "
+                f"— 스코어 {worst.get('score', '-')}점"
+            )
+        lines.append("")
+
+        lines.append("| 종목 | 스코어 | 등급 | 분석 |")
+        lines.append("|---|---|---|---|")
+        for cr in sorted_by_score:
+            emoji = grade_emoji.get(cr.get("grade", "C"), "⚪")
+            details = cr.get("score_details", [])
+            detail_parts = []
+            for detail in details:
+                for sub in detail.split("\n"):
+                    sub = sub.strip().lstrip("- ").strip()
+                    if sub:
+                        detail_parts.append(sub)
+            reason_html = "<br>".join(detail_parts) if detail_parts else "-"
+
+            # 감성 추가
+            for s in (sentiment_data or []):
+                if s["ticker"] == cr["ticker"]:
+                    reason_html += f"<br>뉴스 감성: {s['overall']}"
+                    break
+
+            lines.append(
+                f"| **{cr['name']}** ({cr['ticker']}) "
+                f"| **{cr.get('score', '-')}**/100 "
+                f"| {emoji} {cr.get('grade', '-')} "
+                f"| {reason_html} |"
+            )
+        lines.append("")
+
+    lines.append("---")
+    lines.append("")
 
     # --- 1단계: 주요 뉴스 ---
     lines.append("## 📰 1단계: 주요 증시 뉴스")
@@ -610,6 +666,108 @@ def build_report(
         lines.append("감성 분석할 종목이 없습니다.")
         lines.append("")
 
+    # --- 종목 차트 + 스코어 ---
+    if chart_results:
+        lines.append("---")
+        lines.append("")
+        lines.append("## 📈 종목별 투자 스코어 & 차트")
+        lines.append("")
+
+        grade_emoji = {"A": "🟢", "B": "🔵", "C": "🟡", "D": "🟠", "F": "🔴"}
+
+        lines.append("### 스코어 요약")
+        lines.append("")
+        lines.append("| 종목 | 현재가 | 시총 | PER | PBR | 스코어 | 등급 |")
+        lines.append("|---|---|---|---|---|---|---|")
+        for cr in sorted(chart_results, key=lambda x: x.get("score", 0), reverse=True):
+            price_str = f"${cr['current_price']:.2f}" if cr.get("current_price") else "N/A"
+            emoji = grade_emoji.get(cr.get("grade", "C"), "⚪")
+
+            pe_val = cr.get("pe_ratio", "N/A")
+            if pe_val != "N/A":
+                pe_f = float(pe_val)
+                if pe_f < 0:
+                    pe_label = f"{pe_val} (적자)"
+                elif pe_f < 15:
+                    pe_label = f"{pe_val} (저평가)"
+                elif pe_f < 25:
+                    pe_label = f"{pe_val} (적정)"
+                elif pe_f < 40:
+                    pe_label = f"{pe_val} (고평가)"
+                else:
+                    pe_label = f"{pe_val} (매우 고평가)"
+            else:
+                pe_label = "N/A"
+
+            pb_val = cr.get("pb_ratio", "N/A")
+            if pb_val != "N/A":
+                pb_f = float(pb_val)
+                if pb_f < 1:
+                    pb_label = f"{pb_val} (저평가)"
+                elif pb_f < 3:
+                    pb_label = f"{pb_val} (적정)"
+                elif pb_f < 10:
+                    pb_label = f"{pb_val} (고평가)"
+                else:
+                    pb_label = f"{pb_val} (매우 고평가)"
+            else:
+                pb_label = "N/A"
+
+            lines.append(
+                f"| {cr['name']} ({cr['ticker']}) | {price_str} "
+                f"| {cr['market_cap']} | {pe_label} | {pb_label} "
+                f"| **{cr.get('score', 'N/A')}**/100 | {emoji} {cr.get('grade', '-')} |"
+            )
+        lines.append("")
+        lines.append("> 스코어 = 모멘텀(25) + 밸류에이션(25) + 안정성(25) + 52주 위치(25)")
+        lines.append("> 등급: A(80+) 🟢 | B(65+) 🔵 | C(50+) 🟡 | D(35+) 🟠 | F(<35) 🔴")
+        lines.append("")
+        lines.append("<details>")
+        lines.append("<summary>📖 PER·PBR 보는 법 (클릭하여 펼치기)</summary>")
+        lines.append("")
+        lines.append("**PER (주가수익비율)** = 주가 ÷ 주당순이익(EPS)")
+        lines.append("- 이 회사의 1년 이익 대비 주가가 몇 배인지를 보는 지표")
+        lines.append("- PER 15 = \"이 회사가 현재 속도로 15년 벌면 시가총액만큼 번다\"는 의미")
+        lines.append("- **낮을수록** 이익 대비 주가가 저렴 (단, 업종별 평균이 다름)")
+        lines.append("- 일반적 기준: ~15 저평가 | 15~25 적정 | 25~40 고평가 | 40+ 매우 고평가")
+        lines.append("- 적자 기업은 PER이 마이너스(-)이므로 의미 없음")
+        lines.append("")
+        lines.append("**PBR (주가순자산비율)** = 주가 ÷ 주당순자산(BPS)")
+        lines.append("- 회사의 순자산(자산-부채) 대비 주가가 몇 배인지를 보는 지표")
+        lines.append("- PBR 1 = \"회사를 청산하면 투자금만큼 돌려받을 수 있다\"는 의미")
+        lines.append("- **1 미만**이면 자산가치보다 싸게 거래 중 (저평가 가능성)")
+        lines.append("- 기술주는 PBR이 높은 게 보통 (무형자산·성장성 반영)")
+        lines.append("- 일반적 기준: ~1 저평가 | 1~3 적정 | 3~10 고평가 | 10+ 매우 고평가")
+        lines.append("")
+        lines.append("**스코어에서 활용하는 방법**")
+        lines.append("- PER이 적정 범위(15~25)에 있으면 밸류에이션 점수 높음")
+        lines.append("- PER이 너무 높으면(80+) 과열 신호로 점수 낮음")
+        lines.append("- PBR은 핵심 지표 테이블에서 참고용으로 제공")
+        lines.append("")
+        lines.append("</details>")
+        lines.append("")
+
+        for cr in chart_results:
+            lines.append(f"### {cr['name']} ({cr['ticker']}) — {grade_emoji.get(cr.get('grade', 'C'), '')} 등급 {cr.get('grade', '-')} ({cr.get('score', 'N/A')}점)")
+            lines.append("")
+
+            if cr.get("score_details"):
+                for detail in cr["score_details"]:
+                    for sub in detail.split("\n"):
+                        sub = sub.strip().lstrip("- ").strip()
+                        if sub:
+                            lines.append(f"- {sub}")
+                lines.append("")
+
+            if gh_repo and cr.get("chart_path"):
+                filename = os.path.basename(cr["chart_path"])
+                img_url = f"https://raw.githubusercontent.com/{gh_repo}/main/charts/{filename}"
+                lines.append(f"![{cr['name']} 차트]({img_url})")
+                lines.append("")
+            elif cr.get("chart_path"):
+                lines.append(f"*(차트: {cr['chart_path']})*")
+                lines.append("")
+
     # --- 2단계: Motley Fool 분석 ---
     lines.append("---")
     lines.append("")
@@ -652,6 +810,140 @@ def build_report(
     )
 
     return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# 이메일 발송
+# ---------------------------------------------------------------------------
+
+def _markdown_to_html(md: str) -> str:
+    """마크다운을 간단한 HTML로 변환 (이메일용)."""
+    html = md
+
+    html = re.sub(r"^# (.+)$", r"<h1>\1</h1>", html, flags=re.MULTILINE)
+    html = re.sub(r"^## (.+)$", r"<h2>\1</h2>", html, flags=re.MULTILINE)
+    html = re.sub(r"^### (.+)$", r"<h3>\1</h3>", html, flags=re.MULTILINE)
+
+    html = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", html)
+    html = re.sub(r"\*(.+?)\*", r"<em>\1</em>", html)
+
+    html = re.sub(r"\[(.+?)\]\((.+?)\)", r'<a href="\2">\1</a>', html)
+
+    html = re.sub(r"!\[(.+?)\]\((.+?)\)", r'<img src="\2" alt="\1" style="max-width:100%"/>', html)
+
+    lines = html.split("\n")
+    result = []
+    in_table = False
+    for line in lines:
+        if line.startswith("|") and "|" in line[1:]:
+            cells = [c.strip() for c in line.split("|")[1:-1]]
+            if all(set(c) <= set("-| ") for c in cells):
+                continue
+            if not in_table:
+                result.append('<table border="1" cellpadding="8" cellspacing="0" '
+                              'style="border-collapse:collapse;border-color:#ddd;">')
+                row_tag = "th"
+                in_table = True
+            else:
+                row_tag = "td"
+            result.append("<tr>" + "".join(f"<{row_tag}>{c}</{row_tag}>" for c in cells) + "</tr>")
+        else:
+            if in_table:
+                result.append("</table>")
+                in_table = False
+            if line.startswith("> "):
+                result.append(f'<blockquote style="border-left:4px solid #1976D2;'
+                              f'padding:8px 12px;color:#555;">{line[2:]}</blockquote>')
+            elif line.startswith("- "):
+                result.append(f"<li>{line[2:]}</li>")
+            elif line.strip() == "---":
+                result.append("<hr/>")
+            elif line.strip():
+                result.append(f"<p>{line}</p>")
+            else:
+                result.append("<br/>")
+    if in_table:
+        result.append("</table>")
+
+    body = "\n".join(result)
+    return f"""<!DOCTYPE html>
+<html><head><meta charset="utf-8"/><style>
+body {{ font-family: -apple-system, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; color: #333; }}
+h1 {{ color: #1565C0; }} h2 {{ color: #1976D2; border-bottom: 2px solid #E3F2FD; padding-bottom: 8px; }}
+h3 {{ color: #1E88E5; }} table {{ width: 100%; margin: 12px 0; }}
+th {{ background: #1565C0; color: white; }} td {{ background: #FAFAFA; }}
+a {{ color: #1976D2; }} img {{ max-width: 100%; height: auto; margin: 12px 0; }}
+li {{ margin: 4px 0; }}
+</style></head><body>{body}</body></html>"""
+
+
+def send_email(title: str, body_md: str, chart_paths: list[str] | None = None) -> None:
+    """이메일로 리포트를 발송한다.
+
+    환경 변수:
+        EMAIL_TO:       수신자 이메일
+        EMAIL_FROM:     발신자 이메일 (Gmail 주소)
+        EMAIL_PASSWORD: Gmail 앱 비밀번호
+        EMAIL_SMTP:     SMTP 서버 (기본: smtp.gmail.com)
+        EMAIL_PORT:     SMTP 포트 (기본: 587)
+    """
+    import smtplib
+    from email.mime.multipart import MIMEMultipart
+    from email.mime.text import MIMEText
+    from email.mime.image import MIMEImage
+
+    to_addr = os.environ.get("EMAIL_TO", "")
+    from_addr = os.environ.get("EMAIL_FROM", "")
+    password = os.environ.get("EMAIL_PASSWORD", "")
+
+    if not all([to_addr, from_addr, password]):
+        print("[INFO] 이메일 설정이 없어 발송을 건너뜁니다. "
+              "(EMAIL_TO, EMAIL_FROM, EMAIL_PASSWORD 환경 변수 필요)")
+        return
+
+    smtp_server = os.environ.get("EMAIL_SMTP", "smtp.gmail.com")
+    smtp_port = int(os.environ.get("EMAIL_PORT", "587"))
+
+    msg = MIMEMultipart("related")
+    msg["Subject"] = title
+    msg["From"] = from_addr
+    msg["To"] = to_addr
+
+    html_body = _markdown_to_html(body_md)
+
+    if chart_paths:
+        for i, path in enumerate(chart_paths):
+            cid = f"chart_{i}"
+            html_body = html_body.replace(
+                os.path.basename(path),
+                f"cid:{cid}",
+            )
+
+    msg_alt = MIMEMultipart("alternative")
+    msg_alt.attach(MIMEText(body_md, "plain", "utf-8"))
+    msg_alt.attach(MIMEText(html_body, "html", "utf-8"))
+    msg.attach(msg_alt)
+
+    if chart_paths:
+        for i, path in enumerate(chart_paths):
+            try:
+                with open(path, "rb") as f:
+                    img = MIMEImage(f.read())
+                    img.add_header("Content-ID", f"<chart_{i}>")
+                    img.add_header("Content-Disposition", "inline",
+                                   filename=os.path.basename(path))
+                    msg.attach(img)
+            except FileNotFoundError:
+                print(f"[WARN] 차트 파일 없음: {path}", file=sys.stderr)
+
+    try:
+        with smtplib.SMTP(smtp_server, smtp_port) as server:
+            server.starttls()
+            server.login(from_addr, password)
+            server.send_message(msg)
+        print(f"[INFO] 이메일 발송 완료: {to_addr}")
+    except Exception as exc:
+        print(f"[ERROR] 이메일 발송 실패: {exc}", file=sys.stderr)
 
 
 # ---------------------------------------------------------------------------
@@ -708,7 +1000,11 @@ def main() -> None:
 
     ticker_headlines = extract_tickers(filtered)
     tickers_found = set(ticker_headlines.keys())
-    print(f"[INFO] 언급 종목 {len(tickers_found)}개: {', '.join(sorted(tickers_found))}")
+    print(f"[INFO] 뉴스 언급 종목 {len(tickers_found)}개: {', '.join(sorted(tickers_found))}")
+
+    if not tickers_found:
+        print("[INFO] 뉴스에서 종목이 감지되지 않았습니다.")
+    print(f"[INFO] 총 분석 대상: {len(tickers_found)}개 (뉴스 언급 종목만)")
 
     # --- 감성 분석 ---
     print("\n[감성분석] 종목별 뉴스 감성 분석 중...")
@@ -751,17 +1047,147 @@ def main() -> None:
         art["title_kr"] = kr
     print("[INFO] Fool 기사 번역 완료")
 
+    # --- 차트 생성 ---
+    chart_results = []
+    try:
+        from scripts.stock_charts import generate_charts_for_tickers
+        print("\n[차트] 종목별 1개월 차트 생성 중...")
+        chart_results = generate_charts_for_tickers(
+            list(tickers_found), STOCK_TICKERS, "charts"
+        )
+        print(f"[INFO] {len(chart_results)}개 종목 차트 생성 완료")
+    except ImportError:
+        try:
+            from stock_charts import generate_charts_for_tickers
+            print("\n[차트] 종목별 1개월 차트 생성 중...")
+            chart_results = generate_charts_for_tickers(
+                list(tickers_found), STOCK_TICKERS, "charts"
+            )
+            print(f"[INFO] {len(chart_results)}개 종목 차트 생성 완료")
+        except ImportError:
+            print("\n[WARN] stock_charts 모듈을 찾을 수 없습니다. 차트 생성을 건너뜁니다.")
+
+    # --- 차트를 GitHub에 업로드 ---
+    gh_repo = os.environ.get("GH_REPO", "")
+    if gh_repo and chart_results:
+        print("\n[업로드] 차트 이미지를 GitHub에 커밋 중...")
+        try:
+            subprocess.run(["git", "add", "charts/"], capture_output=True, timeout=10)
+            subprocess.run(
+                ["git", "commit", "-m", "Update stock charts"],
+                capture_output=True, timeout=10,
+            )
+            subprocess.run(
+                ["git", "push"], capture_output=True, timeout=30,
+            )
+            print("[INFO] 차트 업로드 완료")
+        except Exception as exc:
+            print(f"[WARN] 차트 업로드 실패: {exc}", file=sys.stderr)
+
     # --- 리포트 ---
     print("\n[리포트] 생성 중...")
-    report = build_report(filtered, ticker_headlines, sentiment_data, fool_matched, fool_general)
+    report = build_report(
+        filtered, ticker_headlines, sentiment_data, chart_results,
+        fool_matched, fool_general, gh_repo,
+    )
 
     print("\n" + report + "\n")
 
     now = datetime.now(KST)
     issue_title = f"📊 일일 증시 분석 리포트 - {now.strftime('%Y-%m-%d')}"
-    create_github_issue(issue_title, report)
+
+    summary_mode = "--summary" in sys.argv
+
+    if summary_mode:
+        # 요약 모드: 결론+요약만 이메일 발송 (Issue 생성 안 함)
+        summary = build_summary_email(
+            sentiment_data, chart_results, now,
+        )
+        summary_title = f"📊 오늘의 증시 요약 - {now.strftime('%Y-%m-%d %H:%M')}"
+        email_charts = [cr["chart_path"] for cr in chart_results if cr.get("chart_path")]
+        send_email(summary_title, summary, email_charts)
+        print("\n" + summary)
+    else:
+        # 전체 모드: Issue + 이메일
+        create_github_issue(issue_title, report)
+        email_charts = [cr["chart_path"] for cr in chart_results if cr.get("chart_path")]
+        send_email(issue_title, report, email_charts)
 
     print("[INFO] 완료!")
+
+
+def build_summary_email(
+    sentiment_data: list[dict],
+    chart_results: list[dict],
+    now: datetime,
+) -> str:
+    """결론과 요약만 담은 간결한 이메일 본문을 생성한다."""
+    date_str = now.strftime("%Y년 %m월 %d일 %H:%M KST")
+    grade_emoji = {"A": "🟢", "B": "🔵", "C": "🟡", "D": "🟠", "F": "🔴"}
+
+    lines = [
+        "# 📊 오늘의 증시 요약",
+        "",
+        f"> {date_str}",
+        "",
+    ]
+
+    # --- 결론 ---
+    if chart_results:
+        sorted_by_score = sorted(chart_results, key=lambda x: x.get("score", 0), reverse=True)
+
+        lines.append("## 🏆 결론")
+        lines.append("")
+
+        best = sorted_by_score[0]
+        worst = sorted_by_score[-1]
+        lines.append(f"> {grade_emoji.get(best.get('grade'), '⚪')} **가장 유망**: "
+                      f"{best['name']}({best['ticker']}) — {best.get('score', '-')}점")
+        if len(sorted_by_score) > 1:
+            lines.append(f"> {grade_emoji.get(worst.get('grade'), '⚪')} **가장 주의**: "
+                          f"{worst['name']}({worst['ticker']}) — {worst.get('score', '-')}점")
+        lines.append("")
+
+        lines.append("| 종목 | 스코어 | 등급 | 분석 |")
+        lines.append("|---|---|---|---|")
+        for cr in sorted_by_score:
+            emoji = grade_emoji.get(cr.get("grade", "C"), "⚪")
+            details = cr.get("score_details", [])
+            detail_parts = []
+            for detail in details:
+                for sub in detail.split("\n"):
+                    sub = sub.strip().lstrip("- ").strip()
+                    if sub:
+                        detail_parts.append(sub)
+
+            for s in (sentiment_data or []):
+                if s["ticker"] == cr["ticker"]:
+                    detail_parts.append(f"뉴스 감성: {s['overall']}")
+                    break
+
+            price_str = f"${cr['current_price']:.2f}" if cr.get("current_price") else ""
+            if price_str:
+                detail_parts.insert(0, f"현재가: {price_str}")
+
+            reason_html = "<br>".join(detail_parts) if detail_parts else "-"
+            lines.append(
+                f"| **{cr['name']}** ({cr['ticker']}) "
+                f"| **{cr.get('score', '-')}**/100 "
+                f"| {emoji} {cr.get('grade', '-')} "
+                f"| {reason_html} |"
+            )
+        lines.append("")
+
+    lines.append("---")
+    lines.append("")
+    gh_repo = os.environ.get("GH_REPO", "")
+    if gh_repo:
+        issues_url = f"https://github.com/{gh_repo}/issues"
+    else:
+        issues_url = "https://github.com/ghdkfndk/hjkwon/issues"
+    lines.append(f"📎 [상세 리포트 보기 (GitHub)]({issues_url}) — 10시에 전체 분석이 게시됩니다.")
+
+    return "\n".join(lines)
 
 
 if __name__ == "__main__":

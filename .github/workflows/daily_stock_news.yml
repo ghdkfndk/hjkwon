@@ -1,13 +1,16 @@
-name: 📊 일일 증시 분석 리포트 (뉴스 + Motley Fool)
+name: 📊 일일 증시 분석 리포트
 
 on:
   schedule:
-    # 매일 10:00 KST = 01:00 UTC
+    # 매일 10:00 KST = 01:00 UTC (11시 도착 목표)
     - cron: "0 1 * * *"
+    # 매일 22:00 KST = 13:00 UTC (23시 도착 목표)
+    - cron: "0 13 * * *"
   workflow_dispatch: # 수동 실행도 가능
 
 permissions:
   issues: write
+  contents: write
 
 jobs:
   stock-news:
@@ -21,8 +24,16 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          sudo apt-get update -qq && sudo apt-get install -y -qq fonts-nanum
+
       - name: Run stock news script
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
+          EMAIL_TO: "hj.kwon@telechips.com"
+          EMAIL_FROM: "ghdkfndk@gmail.com"
+          EMAIL_PASSWORD: "kcrfrojgchbfofxm"
         run: python scripts/stock_news.py
