@@ -414,6 +414,64 @@ function renderNews(s) {
   </div>`;
 }
 
+function renderRevenueStructure(s, idx) {
+  const rs = s.revenue_structure;
+  if (!rs || !rs.length) return '';
+  const latest = rs[0];
+  const unit = latest.unit || '$B';
+
+  // 워터폴 데이터
+  const wfLabels = ['매출', '매출원가', '매출총이익', '판관비+R&D', '영업이익', '기타', '순이익'];
+  const wfValues = [latest.revenue, -latest.cost_of_revenue, latest.gross_profit,
+    -(latest.sga + latest.rnd), latest.operating_income,
+    latest.net_income - latest.operating_income, latest.net_income];
+  const wfColors = wfValues.map(v => v >= 0 ? 'rgba(76,175,80,0.8)' : 'rgba(244,67,54,0.8)');
+
+  // 연도별 비교 테이블
+  let tableRows = rs.map(y => `
+    <tr>
+      <td style="color:#90CAF9;font-weight:bold;">${y.year}</td>
+      <td>${y.revenue}${unit}</td>
+      <td>${y.gross_profit}${unit} <span style="color:#aaa;font-size:11px">(${y.gross_margin}%)</span></td>
+      <td>${y.operating_income}${unit} <span style="color:#aaa;font-size:11px">(${y.operating_margin}%)</span></td>
+      <td>${y.net_income}${unit} <span style="color:#aaa;font-size:11px">(${y.net_margin}%)</span></td>
+    </tr>`).join('');
+
+  // 전년 대비 성장률
+  let growthHtml = '';
+  if (rs.length >= 2) {
+    const cur = rs[0], prev = rs[1];
+    const revG = prev.revenue ? ((cur.revenue - prev.revenue) / prev.revenue * 100).toFixed(1) : 'N/A';
+    const oiG = prev.operating_income ? ((cur.operating_income - prev.operating_income) / prev.operating_income * 100).toFixed(1) : 'N/A';
+    const niG = prev.net_income ? ((cur.net_income - prev.net_income) / prev.net_income * 100).toFixed(1) : 'N/A';
+    const gc = (v) => v > 0 ? '#4CAF50' : '#F44336';
+    growthHtml = `<div style="display:flex;gap:16px;margin-top:12px;flex-wrap:wrap;">
+      <div style="padding:8px 16px;background:rgba(255,255,255,0.05);border-radius:8px;"><span style="color:#aaa;font-size:12px;">매출 성장</span><br><span style="font-size:18px;font-weight:bold;color:${gc(revG)}">${revG > 0?'+':''}${revG}%</span></div>
+      <div style="padding:8px 16px;background:rgba(255,255,255,0.05);border-radius:8px;"><span style="color:#aaa;font-size:12px;">영업이익 성장</span><br><span style="font-size:18px;font-weight:bold;color:${gc(oiG)}">${oiG > 0?'+':''}${oiG}%</span></div>
+      <div style="padding:8px 16px;background:rgba(255,255,255,0.05);border-radius:8px;"><span style="color:#aaa;font-size:12px;">순이익 성장</span><br><span style="font-size:18px;font-weight:bold;color:${gc(niG)}">${niG > 0?'+':''}${niG}%</span></div>
+    </div>`;
+  }
+
+  return `<div class="direction-box">
+    <div class="direction-title" style="margin-bottom:16px;">💰 수익 구조 분석 (${latest.year})</div>
+    ${growthHtml}
+    <table style="width:100%;margin:16px 0;border-collapse:collapse;font-size:13px;">
+      <tr style="border-bottom:1px solid rgba(255,255,255,0.1);">
+        <th style="padding:8px;text-align:left;color:#90CAF9;">연도</th>
+        <th style="padding:8px;text-align:left;color:#90CAF9;">매출</th>
+        <th style="padding:8px;text-align:left;color:#90CAF9;">매출총이익 (마진)</th>
+        <th style="padding:8px;text-align:left;color:#90CAF9;">영업이익 (마진)</th>
+        <th style="padding:8px;text-align:left;color:#90CAF9;">순이익 (마진)</th>
+      </tr>
+      ${tableRows}
+    </table>
+    <div class="charts-grid">
+      <div class="chart-wrap"><canvas id="waterfall_${idx}"></canvas></div>
+      <div class="chart-wrap"><canvas id="margin_trend_${idx}"></canvas></div>
+    </div>
+  </div>`;
+}
+
 function renderStock(s, idx) {
   const c = document.getElementById('results');
   const [peText,peColor] = peLabel(s.trailing_pe);
@@ -499,7 +557,8 @@ function renderStock(s, idx) {
     <div class="charts-grid">
       <div class="chart-wrap"><canvas id="rev_${idx}"></canvas></div>
       <div class="chart-wrap"><canvas id="margin_${idx}"></canvas></div>
-    </div>`;
+    </div>
+    ${renderRevenueStructure(s, idx)}`;
   c.appendChild(div);
 
   new Chart(document.getElementById('price_'+idx), {
@@ -522,6 +581,58 @@ function renderStock(s, idx) {
       type:'bar',
       data:{labels:s.quarters.map(q=>q.label),datasets:[{label:'이익률 (%)',data:s.quarters.map(q=>q.margin),backgroundColor:s.quarters.map(q=>q.margin>40?'rgba(76,175,80,0.8)':q.margin>20?'rgba(255,193,7,0.8)':'rgba(244,67,54,0.8)')}]},
       options:{responsive:true,plugins:{title:{display:true,text:'분기별 이익률',font:{size:14}}},scales:{y:{beginAtZero:true}}}
+    });
+  }
+
+  // 수익 구조 차트
+  const rs = s.revenue_structure;
+  if (rs && rs.length) {
+    const latest = rs[0];
+    const unit = latest.unit || '$B';
+
+    // 워터폴 차트
+    const wfLabels = ['매출', '매출원가', '매출총이익', '판관비', '영업이익', '순이익'];
+    const wfData = [latest.revenue, latest.cost_of_revenue, latest.gross_profit,
+      latest.sga + latest.rnd, latest.operating_income, latest.net_income];
+    const wfColors = ['#1976D2','#F44336','#4CAF50','#FF9800','#2196F3','#8BC34A'];
+
+    new Chart(document.getElementById('waterfall_'+idx), {
+      type: 'bar',
+      data: {
+        labels: wfLabels,
+        datasets: [{
+          label: unit,
+          data: wfData,
+          backgroundColor: wfColors,
+          borderRadius: 4,
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          title: { display: true, text: '수익 구조 (' + latest.year + ')', font: { size: 14 } },
+          tooltip: { callbacks: { label: (ctx) => ctx.parsed.y + unit + ' (' + (ctx.parsed.y/latest.revenue*100).toFixed(0) + '%)' } }
+        }
+      }
+    });
+
+    // 마진 트렌드
+    const years = rs.map(y=>y.year).reverse();
+    new Chart(document.getElementById('margin_trend_'+idx), {
+      type: 'line',
+      data: {
+        labels: years,
+        datasets: [
+          { label: '매출총이익률 (%)', data: rs.map(y=>y.gross_margin).reverse(), borderColor: '#4CAF50', tension: 0.3 },
+          { label: '영업이익률 (%)', data: rs.map(y=>y.operating_margin).reverse(), borderColor: '#2196F3', tension: 0.3 },
+          { label: '순이익률 (%)', data: rs.map(y=>y.net_margin).reverse(), borderColor: '#FF9800', tension: 0.3 },
+        ]
+      },
+      options: {
+        responsive: true,
+        plugins: { title: { display: true, text: '마진 추이 (연도별)', font: { size: 14 } } },
+        scales: { y: { beginAtZero: true } }
+      }
     });
   }
 }
@@ -753,6 +864,57 @@ def fetch_stock(raw_ticker: str) -> dict | None:
             "score_grade": score_data["grade"],
             "score_details": score_data["details"],
         }
+
+        # 수익 구조 분석
+        import math as _math
+        revenue_structure = None
+        try:
+            ann_income = stock.income_stmt
+            if ann_income is not None and not ann_income.empty:
+                years_data = []
+                for col in ann_income.columns[:3]:
+                    def _safe(key):
+                        try:
+                            v = float(ann_income.loc[key, col])
+                            return v if not _math.isnan(v) else 0
+                        except Exception:
+                            return 0
+                    rev = _safe("Total Revenue")
+                    if rev == 0:
+                        continue
+                    div = 1e12 if is_kr else 1e9
+                    unit = "조원" if is_kr else "$B"
+                    cogs = _safe("Cost Of Revenue")
+                    gross = _safe("Gross Profit")
+                    opex = _safe("Operating Expense")
+                    sga = _safe("Selling General And Administration")
+                    rnd = _safe("Research And Development")
+                    oi = _safe("Operating Income")
+                    ni = _safe("Net Income")
+                    ebitda = _safe("EBITDA")
+
+                    years_data.append({
+                        "year": col.strftime("%Y"),
+                        "unit": unit,
+                        "revenue": round(rev / div, 1),
+                        "cost_of_revenue": round(cogs / div, 1),
+                        "gross_profit": round(gross / div, 1),
+                        "gross_margin": round(gross / rev * 100, 1) if rev else 0,
+                        "operating_expense": round(opex / div, 1),
+                        "sga": round(sga / div, 1),
+                        "rnd": round(rnd / div, 1),
+                        "operating_income": round(oi / div, 1),
+                        "operating_margin": round(oi / rev * 100, 1) if rev else 0,
+                        "net_income": round(ni / div, 1),
+                        "net_margin": round(ni / rev * 100, 1) if rev else 0,
+                        "ebitda": round(ebitda / div, 1),
+                    })
+                if years_data:
+                    revenue_structure = years_data
+        except Exception as e:
+            print(f"[WARN] 수익 구조 분석 실패: {e}")
+
+        result["revenue_structure"] = revenue_structure
 
         print(f"[INFO] {display_name} 뉴스 수집 중...")
         news_list = _fetch_news(ticker, display_name)
