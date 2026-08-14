@@ -593,15 +593,13 @@ function renderRevenueStructure(s, idx) {
     ${growthHtml}
     ${renderSegmentDonut(s, idx)}
     <div class="charts-grid">
-      <div class="chart-wrap" style="text-align:center;">
-        <p style="color:#90CAF9;font-size:13px;font-weight:bold;margin-bottom:8px;">매출 구성</p>
+      <div class="chart-wrap" style="text-align:center;background:radial-gradient(circle at center, rgba(25,118,210,0.08) 0%, transparent 70%);">
+        <p style="color:#90CAF9;font-size:14px;font-weight:bold;margin-bottom:12px;">💵 매출 구성</p>
         <canvas id="donut1_${idx}"></canvas>
-        <p style="color:#aaa;font-size:12px;margin-top:8px;">매출 ${fmtVal(latest.revenue)}</p>
       </div>
-      <div class="chart-wrap" style="text-align:center;">
-        <p style="color:#90CAF9;font-size:13px;font-weight:bold;margin-bottom:8px;">매출총이익 구성</p>
+      <div class="chart-wrap" style="text-align:center;background:radial-gradient(circle at center, rgba(76,175,80,0.08) 0%, transparent 70%);">
+        <p style="color:#90CAF9;font-size:14px;font-weight:bold;margin-bottom:12px;">✂️ 비용 & 이익</p>
         <canvas id="donut2_${idx}"></canvas>
-        <p style="color:#aaa;font-size:12px;margin-top:8px;">매출총이익 ${fmtVal(latest.gross_profit)}</p>
       </div>
     </div>
     <table style="width:100%;margin:16px 0;border-collapse:collapse;font-size:13px;">
@@ -738,85 +736,136 @@ function renderStock(s, idx) {
   if (rs && rs.length) {
     const latest = rs[0];
     const unit = latest.unit || '$B';
+    const centerTextPlugin = {
+      id: 'centerText',
+      afterDraw(chart) {
+        const { ctx, chartArea } = chart;
+        const meta = chart.options.plugins.centerText;
+        if (!meta) return;
+        const cx = (chartArea.left + chartArea.right) / 2;
+        const cy = (chartArea.top + chartArea.bottom) / 2;
+        ctx.save();
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.font = 'bold 20px -apple-system, sans-serif';
+        ctx.fillStyle = '#fff';
+        ctx.fillText(meta.line1 || '', cx, cy - 10);
+        ctx.font = '12px -apple-system, sans-serif';
+        ctx.fillStyle = '#aaa';
+        ctx.fillText(meta.line2 || '', cx, cy + 12);
+        ctx.restore();
+      }
+    };
 
     // 세그먼트 도넛 차트
     const seg = s.segments;
-    if (seg && document.getElementById('seg_donut_'+idx)) {
-      const colors = ['#1976D2','#4CAF50','#FF9800','#9C27B0','#F44336','#00BCD4','#795548','#607D8B'];
+    if (seg && !seg.estimated && document.getElementById('seg_donut_'+idx)) {
+      const segColors = ['#42A5F5','#66BB6A','#FFA726','#AB47BC','#EF5350','#26C6DA','#8D6E63','#78909C'];
+      const segTotal = seg.segments.reduce((a,b)=>a+b.revenue,0);
       new Chart(document.getElementById('seg_donut_'+idx), {
         type: 'doughnut',
+        plugins: [centerTextPlugin],
         data: {
           labels: seg.segments.map(s => s.name),
           datasets: [{
             data: seg.segments.map(s => s.revenue),
-            backgroundColor: colors.slice(0, seg.segments.length),
-            borderWidth: 2,
-            borderColor: 'rgba(0,0,0,0.3)',
+            backgroundColor: segColors.slice(0, seg.segments.length),
+            borderWidth: 3,
+            borderColor: 'rgba(15,12,41,0.8)',
+            hoverBorderColor: '#fff',
+            hoverBorderWidth: 2,
+            hoverOffset: 12,
           }]
         },
         options: {
           responsive: true,
-          cutout: '50%',
+          cutout: '58%',
+          animation: { animateRotate: true, duration: 1200 },
           plugins: {
+            centerText: { line1: segTotal.toLocaleString(), line2: '합계 ('+seg.unit+')' },
             legend: { display: false },
-            tooltip: { callbacks: { label: (ctx) => ctx.label + ': ' + ctx.parsed.toLocaleString() + seg.unit + ' (' + (ctx.parsed / seg.segments.reduce((a,b)=>a+b.revenue,0) * 100).toFixed(0) + '%)' } }
+            tooltip: {
+              backgroundColor: 'rgba(0,0,0,0.85)', titleFont: { size: 14 }, bodyFont: { size: 13 }, padding: 12, cornerRadius: 8,
+              callbacks: { label: (ctx) => ' ' + ctx.label + ': ' + ctx.parsed.toLocaleString() + seg.unit + ' (' + (ctx.parsed / segTotal * 100).toFixed(0) + '%)' }
+            }
           }
         }
       });
     }
 
     // 도넛 1: 매출 = 매출원가 + 매출총이익
+    // 도넛 중앙 텍스트 플러그인
+
+    const donutStyle = {
+      borderWidth: 3,
+      borderColor: 'rgba(15,12,41,0.8)',
+      hoverBorderColor: '#fff',
+      hoverBorderWidth: 2,
+      hoverOffset: 12,
+    };
+
+    // 도넛 1: 매출 = 매출원가 + 매출총이익
     new Chart(document.getElementById('donut1_'+idx), {
       type: 'doughnut',
+      plugins: [centerTextPlugin],
       data: {
-        labels: ['매출원가 ('+((latest.cost_of_revenue/latest.revenue)*100).toFixed(0)+'%)', '매출총이익 ('+latest.gross_margin+'%)'],
+        labels: ['매출원가 '+((latest.cost_of_revenue/latest.revenue)*100).toFixed(0)+'%', '매출총이익 '+latest.gross_margin+'%'],
         datasets: [{
           data: [latest.cost_of_revenue, latest.gross_profit],
-          backgroundColor: ['#F44336', '#4CAF50'],
-          borderWidth: 2,
-          borderColor: 'rgba(0,0,0,0.3)',
+          backgroundColor: ['#EF5350', '#66BB6A'],
+          ...donutStyle,
         }]
       },
       options: {
         responsive: true,
-        cutout: '55%',
+        cutout: '62%',
+        animation: { animateRotate: true, duration: 1200 },
         plugins: {
-          legend: { position: 'bottom', labels: { font: { size: 12 }, padding: 12 } },
-          tooltip: { callbacks: { label: (ctx) => ctx.label + ': ' + ctx.parsed.toFixed(1) + unit } }
+          centerText: { line1: latest.revenue.toFixed(1), line2: '매출 ('+unit+')' },
+          legend: { position: 'bottom', labels: { font: { size: 13, weight: 'bold' }, padding: 14, usePointStyle: true, pointStyle: 'circle' } },
+          tooltip: {
+            backgroundColor: 'rgba(0,0,0,0.85)', titleFont: { size: 14 }, bodyFont: { size: 13 }, padding: 12, cornerRadius: 8,
+            callbacks: { label: (ctx) => ' ' + ctx.label + ': ' + ctx.parsed.toFixed(1) + unit }
+          }
         }
       }
     });
 
-    // 도넛 2: 매출총이익 = 판매마케팅 + R&D + 영업이익(→순이익)
+    // 도넛 2: 매출총이익 구성
     const smExp = latest.sga > latest.rnd ? latest.sga - latest.rnd : latest.sga;
     const otherExp = latest.operating_expense - latest.sga - latest.rnd;
     const donut2Data = [];
     const donut2Labels = [];
     const donut2Colors = [];
 
-    if (smExp > 0) { donut2Labels.push('판매&마케팅'); donut2Data.push(smExp); donut2Colors.push('#FF9800'); }
-    if (latest.rnd > 0) { donut2Labels.push('R&D'); donut2Data.push(latest.rnd); donut2Colors.push('#9C27B0'); }
-    if (otherExp > 0) { donut2Labels.push('기타 비용'); donut2Data.push(otherExp); donut2Colors.push('#607D8B'); }
-    if (latest.net_income > 0) { donut2Labels.push('순이익 ('+latest.net_margin+'%)'); donut2Data.push(latest.net_income); donut2Colors.push('#2196F3'); }
-    else if (latest.operating_income > 0) { donut2Labels.push('영업이익'); donut2Data.push(latest.operating_income); donut2Colors.push('#2196F3'); }
+    if (latest.net_income > 0) { donut2Labels.push('순이익 '+latest.net_margin+'%'); donut2Data.push(latest.net_income); donut2Colors.push('#42A5F5'); }
+    else if (latest.operating_income > 0) { donut2Labels.push('영업이익'); donut2Data.push(latest.operating_income); donut2Colors.push('#42A5F5'); }
+    if (smExp > 0) { donut2Labels.push('판매&마케팅'); donut2Data.push(smExp); donut2Colors.push('#FFA726'); }
+    if (latest.rnd > 0) { donut2Labels.push('R&D'); donut2Data.push(latest.rnd); donut2Colors.push('#AB47BC'); }
+    if (otherExp > 0) { donut2Labels.push('기타 비용'); donut2Data.push(otherExp); donut2Colors.push('#78909C'); }
 
     new Chart(document.getElementById('donut2_'+idx), {
       type: 'doughnut',
+      plugins: [centerTextPlugin],
       data: {
         labels: donut2Labels,
         datasets: [{
           data: donut2Data,
           backgroundColor: donut2Colors,
-          borderWidth: 2,
-          borderColor: 'rgba(0,0,0,0.3)',
+          ...donutStyle,
         }]
       },
       options: {
         responsive: true,
-        cutout: '55%',
+        cutout: '62%',
+        animation: { animateRotate: true, duration: 1200 },
         plugins: {
-          legend: { position: 'bottom', labels: { font: { size: 12 }, padding: 12 } },
-          tooltip: { callbacks: { label: (ctx) => ctx.label + ': ' + ctx.parsed.toFixed(1) + unit } }
+          centerText: { line1: latest.gross_profit.toFixed(1), line2: '매출총이익 ('+unit+')' },
+          legend: { position: 'bottom', labels: { font: { size: 13, weight: 'bold' }, padding: 14, usePointStyle: true, pointStyle: 'circle' } },
+          tooltip: {
+            backgroundColor: 'rgba(0,0,0,0.85)', titleFont: { size: 14 }, bodyFont: { size: 13 }, padding: 12, cornerRadius: 8,
+            callbacks: { label: (ctx) => ' ' + ctx.label + ': ' + ctx.parsed.toFixed(1) + unit }
+          }
         }
       }
     });
