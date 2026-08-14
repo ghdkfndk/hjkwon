@@ -4,7 +4,7 @@
 티커를 입력하면 실시간으로 주가·PER·실적 차트를 보여준다.
 
 실행: python app.py
-접속: http://localhost:5000
+접속: http://localhost:5001
 """
 from __future__ import annotations
 
@@ -289,114 +289,267 @@ HTML = """<!DOCTYPE html>
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>📊 종목 분석기</title>
+<title>종목 분석기</title>
+<link rel="preconnect" href="https://cdn.jsdelivr.net"/>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css"/>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3"></script>
 <style>
+:root {
+  --bg:#07080f; --text:#e8ecf4; --muted:#8b95a8; --faint:#64708a;
+  --card:rgba(255,255,255,0.045); --card-2:rgba(255,255,255,0.06);
+  --stroke:rgba(255,255,255,0.09); --stroke-2:rgba(255,255,255,0.14);
+  --accent:#6ea8ff; --accent-2:#7dd3fc; --up:#34d399; --down:#f87171;
+  --shadow:0 18px 50px rgba(0,0,0,0.35);
+}
 * { margin:0; padding:0; box-sizing:border-box; }
-body { font-family:-apple-system,'Nanum Gothic',sans-serif; background:linear-gradient(135deg,#0f0c29,#302b63,#24243e); min-height:100vh; color:#E0E0E0; }
+html { color-scheme: dark; }
+body {
+  font-family: Pretendard, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: var(--bg); color: var(--text); min-height: 100vh; letter-spacing: -0.01em;
+}
+body::before {
+  content:''; position:fixed; inset:0; pointer-events:none; z-index:0;
+  background:
+    radial-gradient(ellipse 70% 45% at 8% -8%, rgba(110,168,255,0.22), transparent 55%),
+    radial-gradient(ellipse 50% 35% at 92% 0%, rgba(125,211,252,0.10), transparent 50%),
+    radial-gradient(ellipse 55% 30% at 50% 110%, rgba(52,211,153,0.07), transparent 50%);
+}
+::selection { background: rgba(110,168,255,0.35); }
+::-webkit-scrollbar { width:10px; height:10px; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.14); border-radius:99px; }
+.page { position:relative; z-index:1; }
 
-.top-bar { background:rgba(0,0,0,0.3); backdrop-filter:blur(10px); padding:16px 24px; position:sticky; top:0; z-index:100; border-bottom:1px solid rgba(255,255,255,0.1); }
-.top-bar h1 { font-size:22px; color:#fff; display:inline; }
-.search-box { display:flex; gap:8px; margin-top:12px; max-width:500px; }
-.search-box input { flex:1; padding:10px 16px; border-radius:24px; border:1px solid rgba(255,255,255,0.2); background:rgba(255,255,255,0.1); color:#fff; font-size:16px; outline:none; }
-.search-box input::placeholder { color:#888; }
-.search-box input:focus { border-color:#1976D2; box-shadow:0 0 0 3px rgba(25,118,210,0.3); }
-.search-box button { padding:10px 24px; border-radius:24px; border:none; background:linear-gradient(135deg,#1976D2,#1565C0); color:#fff; font-size:15px; font-weight:bold; cursor:pointer; }
-.search-box button:hover { background:linear-gradient(135deg,#1E88E5,#1976D2); }
-.search-box button:disabled { opacity:0.5; cursor:not-allowed; }
+.top-bar {
+  position:sticky; top:0; z-index:100; padding:16px 24px 14px;
+  background: rgba(7,8,15,0.72); backdrop-filter: blur(18px) saturate(1.3);
+  border-bottom: 1px solid var(--stroke);
+}
+.brand-row { display:flex; align-items:center; justify-content:space-between; gap:18px; flex-wrap:wrap; max-width:1120px; margin:0 auto; }
+.brand { display:flex; align-items:center; gap:12px; }
+.logo {
+  width:42px; height:42px; border-radius:12px; display:grid; place-items:center; font-size:20px;
+  background: linear-gradient(135deg, #4f8cff, #67e8f9); box-shadow: 0 8px 20px rgba(79,140,255,0.28);
+}
+.brand h1 { font-size:18px; font-weight:720; color:#fff; letter-spacing:-0.03em; }
+.tagline { font-size:12px; color:var(--muted); margin-top:2px; }
+.search-box { display:flex; gap:8px; flex:1; min-width:260px; max-width:520px; }
+.search-box input {
+  flex:1; padding:11px 16px; border-radius:14px; border:1px solid var(--stroke-2);
+  background: rgba(255,255,255,0.06); color:#fff; font-size:15px; outline:none; font-family:inherit;
+}
+.search-box input::placeholder { color:var(--faint); }
+.search-box input:focus { border-color: rgba(110,168,255,0.7); box-shadow: 0 0 0 4px rgba(110,168,255,0.16); }
+.search-box button {
+  padding:11px 20px; border-radius:14px; border:none; cursor:pointer; font-family:inherit;
+  background: linear-gradient(135deg,#4f8cff,#3b6fe0); color:#fff; font-size:14px; font-weight:700;
+  box-shadow: 0 8px 18px rgba(79,140,255,0.25); transition: transform .15s ease, filter .15s ease;
+}
+.search-box button:hover { filter:brightness(1.08); transform: translateY(-1px); }
+.search-box button:disabled { opacity:0.5; cursor:not-allowed; transform:none; }
 
-.quick-tags { margin-top:10px; display:flex; flex-wrap:wrap; gap:6px; }
-.quick-tag { padding:4px 12px; border-radius:16px; border:1px solid rgba(255,255,255,0.15); background:rgba(255,255,255,0.05); color:#aaa; font-size:12px; cursor:pointer; transition:all 0.2s; }
-.quick-tag:hover { background:rgba(25,118,210,0.3); border-color:#1976D2; color:#fff; }
-.tab-btn { padding:6px 16px; border-radius:20px; border:1px solid rgba(255,255,255,0.2); background:rgba(255,255,255,0.05); color:#aaa; font-size:13px; cursor:pointer; }
-.tab-btn.active { background:rgba(25,118,210,0.3); border-color:#1976D2; color:#fff; }
+.market-row { max-width:1120px; margin:12px auto 0; display:flex; align-items:center; gap:8px; }
+.tab-btn {
+  padding:6px 14px; border-radius:999px; border:1px solid var(--stroke-2);
+  background: rgba(255,255,255,0.04); color:var(--muted); font-size:13px; cursor:pointer; font-family:inherit;
+  transition: all .15s ease;
+}
+.tab-btn:hover { color:#fff; border-color: rgba(110,168,255,0.4); }
+.tab-btn.active { background: rgba(110,168,255,0.18); border-color: rgba(110,168,255,0.55); color:#fff; font-weight:650; }
+.quick-tags { max-width:1120px; margin:10px auto 0; display:flex; flex-wrap:wrap; gap:6px; }
+.quick-tag {
+  padding:5px 11px; border-radius:999px; border:1px solid var(--stroke);
+  background: rgba(255,255,255,0.04); color:#b7c0d0; font-size:12px; cursor:pointer; transition: all .15s ease;
+}
+.quick-tag:hover { background: rgba(110,168,255,0.18); border-color: rgba(110,168,255,0.5); color:#fff; transform: translateY(-1px); }
 
-.container { max-width:1200px; margin:0 auto; padding:20px; }
+.container { max-width:1120px; margin:0 auto; padding:28px 20px 64px; }
 
-.loading { text-align:center; padding:60px; }
-.loading .spinner { width:48px; height:48px; border:4px solid rgba(255,255,255,0.1); border-top-color:#1976D2; border-radius:50%; animation:spin 0.8s linear infinite; margin:0 auto 16px; }
+.empty-state { text-align:center; padding:72px 16px 40px; }
+.empty-icon {
+  width:72px; height:72px; margin:0 auto 18px; border-radius:22px; display:grid; place-items:center; font-size:32px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.03));
+  border:1px solid var(--stroke); box-shadow: var(--shadow);
+}
+.empty-state h2 { font-size:24px; color:#fff; font-weight:720; letter-spacing:-0.03em; }
+.empty-state p { color:var(--muted); margin-top:8px; font-size:15px; }
+.empty-hints { display:flex; justify-content:center; gap:8px; margin-top:22px; flex-wrap:wrap; }
+.empty-hints span {
+  padding:8px 14px; border-radius:12px; border:1px dashed var(--stroke-2); color:#c5cde0;
+  background: rgba(255,255,255,0.03); font-size:13px; cursor:pointer;
+}
+.empty-hints span:hover { border-style:solid; border-color: var(--accent); color:#fff; }
+
+.loading { text-align:center; padding:80px 16px; color:var(--muted); }
+.loading .spinner {
+  width:42px; height:42px; border:3px solid rgba(255,255,255,0.1); border-top-color: var(--accent);
+  border-radius:50%; animation:spin .8s linear infinite; margin:0 auto 16px;
+}
 @keyframes spin { to { transform:rotate(360deg); } }
+.error-msg { text-align:center; padding:48px 16px; color:#f87171; font-size:16px; background:rgba(248,113,113,0.08); border:1px solid rgba(248,113,113,0.2); border-radius:16px; }
 
-.error-msg { text-align:center; padding:40px; color:#F44336; font-size:16px; }
+.stock-card {
+  background: var(--card); backdrop-filter: blur(16px);
+  border:1px solid var(--stroke); border-radius:22px; padding:28px; margin-bottom:24px;
+  box-shadow: var(--shadow); animation: fadeIn .45s ease;
+}
+@keyframes fadeIn { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:none; } }
 
-.stock-card { background:rgba(255,255,255,0.05); backdrop-filter:blur(10px); border:1px solid rgba(255,255,255,0.1); border-radius:16px; padding:24px; margin-bottom:24px; animation:fadeIn 0.4s ease; }
-@keyframes fadeIn { from { opacity:0; transform:translateY(20px); } to { opacity:1; transform:translateY(0); } }
-
-.card-header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:20px; flex-wrap:wrap; gap:12px; }
-.card-header h2 { color:#fff; font-size:24px; }
-.ticker-badge { background:#1976D2; color:#fff; padding:2px 10px; border-radius:12px; font-size:13px; font-weight:bold; margin-right:8px; }
-.sector { color:#888; font-size:13px; }
+.card-header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:22px; flex-wrap:wrap; gap:16px; }
+.name-row { display:flex; align-items:center; gap:14px; }
+.ticker-avatar {
+  width:50px; height:50px; border-radius:16px; display:grid; place-items:center;
+  font-weight:800; font-size:18px; color:#fff; letter-spacing:-0.04em;
+  background: linear-gradient(135deg, rgba(110,168,255,0.45), rgba(125,211,252,0.12));
+  border:1px solid rgba(255,255,255,0.14);
+}
+.card-header h2 { color:#fff; font-size:24px; font-weight:750; letter-spacing:-0.03em; }
+.ticker-badge {
+  display:inline-block; background: rgba(110,168,255,0.2); color:#cfe0ff; padding:2px 9px;
+  border-radius:8px; font-size:12px; font-weight:700; margin-right:8px; letter-spacing:.02em;
+}
+.sector { color:var(--muted); font-size:13px; }
 .price-area { text-align:right; }
-.big-price { display:block; font-size:36px; font-weight:bold; color:#fff; }
-.price-change { font-size:14px; padding:3px 10px; border-radius:12px; font-weight:bold; }
-.price-up { background:rgba(76,175,80,0.2); color:#4CAF50; }
-.price-down { background:rgba(244,67,54,0.2); color:#F44336; }
-.mcap { color:#888; font-size:14px; margin-top:4px; }
+.big-price { display:block; font-size:34px; font-weight:760; color:#fff; font-variant-numeric: tabular-nums; letter-spacing:-0.04em; }
+.price-change { display:inline-block; font-size:13px; padding:4px 10px; border-radius:999px; font-weight:700; margin-top:6px; }
+.price-up { background:rgba(52,211,153,0.14); color:var(--up); }
+.price-down { background:rgba(248,113,113,0.14); color:var(--down); }
+.mcap { color:var(--muted); font-size:13px; margin-top:6px; }
 
-.metrics-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:16px; margin-bottom:20px; }
-.metric-card { background:rgba(255,255,255,0.05); border-radius:12px; padding:16px; }
-.metric-title { font-size:14px; font-weight:bold; color:#90CAF9; margin-bottom:10px; border-bottom:1px solid rgba(255,255,255,0.1); padding-bottom:8px; }
-.metric-row { display:flex; justify-content:space-between; padding:5px 0; border-bottom:1px solid rgba(255,255,255,0.03); }
-.metric-label { color:#999; font-size:13px; }
-.metric-val { font-weight:bold; font-size:13px; }
+.metrics-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:14px; margin-bottom:18px; }
+.metric-card { background: var(--card-2); border:1px solid var(--stroke); border-radius:16px; padding:16px 18px; }
+.metric-title { font-size:13px; font-weight:700; color:var(--accent-2); margin-bottom:10px; padding-bottom:8px; border-bottom:1px solid var(--stroke); }
+.metric-row { display:flex; justify-content:space-between; padding:7px 0; border-bottom:1px solid rgba(255,255,255,0.04); }
+.metric-row:last-child { border-bottom:none; }
+.metric-label { color:var(--muted); font-size:13px; }
+.metric-val { font-weight:700; font-size:13px; font-variant-numeric: tabular-nums; }
 
-.score-banner { display:flex; align-items:center; gap:20px; padding:16px 20px; border-radius:12px; margin-bottom:20px; }
-.score-banner.A { background:rgba(76,175,80,0.15); border:1px solid rgba(76,175,80,0.3); }
-.score-banner.B { background:rgba(33,150,243,0.15); border:1px solid rgba(33,150,243,0.3); }
-.score-banner.C { background:rgba(255,193,7,0.15); border:1px solid rgba(255,193,7,0.3); }
-.score-banner.D { background:rgba(255,152,0,0.15); border:1px solid rgba(255,152,0,0.3); }
-.score-banner.F { background:rgba(244,67,54,0.15); border:1px solid rgba(244,67,54,0.3); }
-.score-num { font-size:48px; font-weight:bold; }
-.score-banner.A .score-num { color:#4CAF50; } .score-banner.B .score-num { color:#2196F3; }
-.score-banner.C .score-num { color:#FFC107; } .score-banner.D .score-num { color:#FF9800; }
-.score-banner.F .score-num { color:#F44336; }
-.score-detail { flex:1; }
-.score-grade { font-size:20px; font-weight:bold; color:#fff; }
-.score-items { margin-top:6px; font-size:13px; color:#bbb; line-height:1.7; }
+.score-banner { display:flex; align-items:center; gap:20px; padding:16px 18px; border-radius:18px; margin-bottom:20px; }
+.score-banner.A { background:rgba(52,211,153,0.10); border:1px solid rgba(52,211,153,0.28); }
+.score-banner.B { background:rgba(110,168,255,0.10); border:1px solid rgba(110,168,255,0.28); }
+.score-banner.C { background:rgba(250,204,21,0.10); border:1px solid rgba(250,204,21,0.28); }
+.score-banner.D { background:rgba(251,146,60,0.10); border:1px solid rgba(251,146,60,0.28); }
+.score-banner.F { background:rgba(248,113,113,0.10); border:1px solid rgba(248,113,113,0.28); }
+.score-ring {
+  width:88px; height:88px; border-radius:50%; flex-shrink:0;
+  background: conic-gradient(var(--ring) calc(var(--pct) * 1%), rgba(255,255,255,0.08) 0);
+  display:grid; place-items:center;
+}
+.score-ring-inner {
+  width:68px; height:68px; border-radius:50%; background: rgba(10,12,22,0.92);
+  display:grid; place-items:center;
+}
+.score-num { font-size:22px; font-weight:800; letter-spacing:-0.04em; }
+.score-banner.A .score-num, .score-banner.A { --ring:#34d399; } .score-banner.A .score-num { color:#34d399; }
+.score-banner.B .score-num, .score-banner.B { --ring:#6ea8ff; } .score-banner.B .score-num { color:#6ea8ff; }
+.score-banner.C .score-num, .score-banner.C { --ring:#facc15; } .score-banner.C .score-num { color:#facc15; }
+.score-banner.D .score-num, .score-banner.D { --ring:#fb923c; } .score-banner.D .score-num { color:#fb923c; }
+.score-banner.F .score-num, .score-banner.F { --ring:#f87171; } .score-banner.F .score-num { color:#f87171; }
+.score-detail { flex:1; min-width:0; }
+.score-grade { font-size:18px; font-weight:750; color:#fff; }
+.score-items { margin-top:6px; font-size:13px; color:#b7c0d0; line-height:1.7; }
 
-.w52 { margin:16px 0; padding:12px 16px; background:rgba(255,255,255,0.03); border-radius:8px; }
-.w52-labels { display:flex; justify-content:space-between; font-size:12px; color:#888; margin-bottom:6px; }
-.w52-track { position:relative; height:8px; background:rgba(255,255,255,0.1); border-radius:4px; }
-.w52-fill { height:100%; background:linear-gradient(90deg,#4CAF50,#FFC107,#F44336); border-radius:4px; }
-.w52-dot { position:absolute; top:-4px; width:16px; height:16px; background:#fff; border:3px solid #1976D2; border-radius:50%; transform:translateX(-50%); }
+.w52 { margin:4px 0 18px; padding:14px 16px; background: rgba(255,255,255,0.03); border:1px solid var(--stroke); border-radius:14px; }
+.w52-labels { display:flex; justify-content:space-between; font-size:12px; color:var(--muted); margin-bottom:8px; }
+.w52-track { position:relative; height:8px; background:rgba(255,255,255,0.08); border-radius:99px; }
+.w52-fill { height:100%; background:linear-gradient(90deg,#34d399,#facc15,#f87171); border-radius:99px; }
+.w52-dot { position:absolute; top:-5px; width:18px; height:18px; background:#fff; border:3px solid #6ea8ff; border-radius:50%; transform:translateX(-50%); box-shadow:0 0 0 4px rgba(110,168,255,0.18); }
 
-.charts-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:16px; }
-.chart-wrap { background:rgba(255,255,255,0.03); border-radius:12px; padding:16px; }
-.direction-box { background:rgba(255,255,255,0.05); border-radius:12px; padding:16px; margin-bottom:16px; }
-.direction-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; }
-.direction-title { font-size:15px; font-weight:bold; color:#90CAF9; }
-.outlook-badge { padding:4px 14px; border-radius:16px; font-size:13px; font-weight:bold; }
+.charts-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:16px; }
+.chart-wrap { background: rgba(255,255,255,0.03); border:1px solid var(--stroke); border-radius:16px; padding:16px; }
+.section-label { color:var(--accent-2); font-size:13px; font-weight:700; margin-bottom:10px; }
+
+.direction-box { background: rgba(255,255,255,0.035); border:1px solid var(--stroke); border-radius:16px; padding:18px; margin-bottom:16px; }
+.direction-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; gap:10px; flex-wrap:wrap; }
+.direction-title { font-size:14px; font-weight:700; color:var(--accent-2); }
+.outlook-badge { padding:4px 12px; border-radius:999px; font-size:12px; font-weight:700; background: rgba(255,255,255,0.06); border:1px solid var(--stroke); }
 .theme-tags { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:8px; }
-.theme-tag { padding:3px 10px; border-radius:12px; font-size:12px; background:rgba(76,175,80,0.2); color:#81C784; }
-.risk-tag { padding:3px 10px; border-radius:12px; font-size:12px; background:rgba(244,67,54,0.2); color:#EF9A9A; }
-.news-list { margin-top:12px; }
-.news-item { padding:10px 0; border-bottom:1px solid rgba(255,255,255,0.05); }
+.theme-tag { padding:4px 10px; border-radius:999px; font-size:12px; background:rgba(52,211,153,0.14); color:#6ee7b7; }
+.risk-tag { padding:4px 10px; border-radius:999px; font-size:12px; background:rgba(248,113,113,0.14); color:#fca5a5; }
+.subtle { color:var(--muted); font-size:12px; margin-bottom:6px; }
+
+.news-list { margin-top:8px; }
+.news-item { padding:12px 10px; border-radius:12px; border-bottom:1px solid rgba(255,255,255,0.05); transition: background .15s ease; }
+.news-item:hover { background: rgba(255,255,255,0.04); }
 .news-item:last-child { border-bottom:none; }
-.news-title { color:#E0E0E0; font-size:14px; text-decoration:none; line-height:1.5; }
-.news-title:hover { color:#90CAF9; }
-.news-meta { font-size:11px; color:#777; margin-top:4px; }
-.news-summary { font-size:12px; color:#999; margin-top:4px; line-height:1.4; }
-@media(max-width:768px) { .charts-grid{grid-template-columns:1fr;} .card-header{flex-direction:column;} }
+.news-title { color:#e8ecf4; font-size:14px; text-decoration:none; line-height:1.55; font-weight:550; }
+.news-title:hover { color:#93c5fd; }
+.news-meta { font-size:11px; color:var(--faint); margin-top:4px; }
+.news-summary { font-size:12px; color:var(--muted); margin-top:4px; line-height:1.45; }
+
+.stat-chips { display:flex; gap:10px; margin:12px 0; flex-wrap:wrap; }
+.stat-chip { padding:10px 16px; background: rgba(255,255,255,0.04); border:1px solid var(--stroke); border-radius:14px; text-align:center; min-width:110px; }
+.stat-chip span { display:block; color:var(--muted); font-size:11px; margin-bottom:4px; }
+.stat-chip b { font-size:18px; font-weight:760; letter-spacing:-0.03em; }
+
+.fin-table { width:100%; margin:8px 0 16px; border-collapse:separate; border-spacing:0; font-size:13px; overflow:hidden; border-radius:12px; }
+.fin-table th { padding:10px 12px; text-align:left; color:var(--accent-2); font-weight:650; background: rgba(255,255,255,0.04); border-bottom:1px solid var(--stroke); }
+.fin-table td { padding:9px 12px; border-bottom:1px solid rgba(255,255,255,0.05); font-variant-numeric: tabular-nums; }
+.fin-table tr:hover td { background: rgba(255,255,255,0.03); }
+.seg-row { display:flex; align-items:center; padding:6px 0; gap:8px; }
+.seg-dot { width:10px; height:10px; border-radius:50%; flex-shrink:0; }
+
+@media(max-width:768px) {
+  .charts-grid { grid-template-columns:1fr; }
+  .card-header { flex-direction:column; }
+  .price-area { text-align:left; }
+  .top-bar { padding:14px 16px 12px; }
+  .stock-card { padding:18px; border-radius:18px; }
+}
 </style>
 </head>
 <body>
+<div class="page">
 <div class="top-bar">
-  <h1>📊 종목 분석기</h1>
-  <div class="search-box">
-    <input id="tickerInput" placeholder="티커 입력 (예: PLTR, 005930, 삼성전자)" autofocus />
-    <button id="searchBtn" onclick="analyze()">분석</button>
+  <div class="brand-row">
+    <div class="brand">
+      <div class="logo">📊</div>
+      <div>
+        <h1>종목 분석기</h1>
+        <p class="tagline">실시간 주가 · 밸류에이션 · 실적 한눈에</p>
+      </div>
+    </div>
+    <div class="search-box">
+      <input id="tickerInput" placeholder="티커, 종목코드, 한글 이름 (예: PLTR, 삼성전자)" autofocus />
+      <button id="searchBtn" onclick="analyze()">분석</button>
+    </div>
   </div>
-  <div style="margin-top:10px;display:flex;gap:8px;">
+  <div class="market-row">
     <button class="tab-btn active" onclick="showTab('us',this)">🇺🇸 미국</button>
     <button class="tab-btn" onclick="showTab('kr',this)">🇰🇷 한국</button>
   </div>
   <div class="quick-tags" id="usTags"></div>
   <div class="quick-tags" id="krTags" style="display:none"></div>
 </div>
-<div class="container" id="results"></div>
+<div class="container" id="results">
+  <div class="empty-state" id="emptyState">
+    <div class="empty-icon">📈</div>
+    <h2>종목을 검색해 보세요</h2>
+    <p>티커, 6자리 종목코드, 또는 한글 회사명으로 바로 분석합니다.</p>
+    <div class="empty-hints">
+      <span onclick="quickSearch('NVDA')">NVDA</span>
+      <span onclick="quickSearch('PLTR')">PLTR</span>
+      <span onclick="quickSearch('005930')">삼성전자</span>
+      <span onclick="quickSearch('TSLA')">TSLA</span>
+    </div>
+  </div>
+</div>
+</div>
 
 <script>
+if (window.Chart) {
+  Chart.defaults.color = '#94a3b8';
+  Chart.defaults.borderColor = 'rgba(255,255,255,0.08)';
+  Chart.defaults.font.family = "Pretendard, -apple-system, BlinkMacSystemFont, sans-serif";
+  Chart.defaults.plugins.legend.labels.usePointStyle = true;
+  Chart.defaults.plugins.title.color = '#e2e8f0';
+  Chart.defaults.plugins.title.font = { size: 14, weight: '600' };
+  Chart.defaults.elements.line.borderWidth = 2.2;
+  Chart.defaults.plugins.tooltip.backgroundColor = 'rgba(8,10,18,0.92)';
+  Chart.defaults.plugins.tooltip.padding = 12;
+  Chart.defaults.plugins.tooltip.cornerRadius = 10;
+}
+
 const POPULAR_US = POPULAR_US_JSON;
 const POPULAR_KR = POPULAR_KR_JSON;
 const KR_NAME_MAP = Object.fromEntries(POPULAR_KR.map(([c,n])=>[n,c]));
@@ -481,10 +634,10 @@ function renderDirection(s) {
   return `<div class="direction-box">
     <div class="direction-header">
       <span class="direction-title">🔭 기업 방향성 분석</span>
-      <span class="outlook-badge" style="background:rgba(0,0,0,0.3);color:${d.outlook_color}">${d.outlook} (뉴스 ${d.news_count}건 분석)</span>
+      <span class="outlook-badge" style="color:${d.outlook_color}">${d.outlook} · 뉴스 ${d.news_count}건</span>
     </div>
-    ${themes ? '<div style="margin-bottom:6px;color:#aaa;font-size:12px;">핵심 테마</div><div class="theme-tags">'+themes+'</div>' : ''}
-    ${risks ? '<div style="margin-bottom:6px;color:#aaa;font-size:12px;margin-top:8px;">리스크 요인</div><div class="theme-tags">'+risks+'</div>' : ''}
+    ${themes ? '<div class="subtle">핵심 테마</div><div class="theme-tags">'+themes+'</div>' : ''}
+    ${risks ? '<div class="subtle" style="margin-top:8px;">리스크 요인</div><div class="theme-tags">'+risks+'</div>' : ''}
   </div>`;
 }
 
@@ -539,12 +692,12 @@ function renderSegmentDonut(s, idx) {
         ${seg.segments.map((s,i) => {
           const pct = total > 0 ? (s.revenue / total * 100).toFixed(0) : '?';
           const colors = ['#1976D2','#4CAF50','#FF9800','#9C27B0','#F44336','#00BCD4','#795548','#607D8B'];
-          return `<div style="display:flex;align-items:center;padding:4px 0;">
-            <span style="width:10px;height:10px;background:${colors[i%8]};border-radius:50%;margin-right:8px;"></span>
-            <span style="flex:1;color:#ddd;font-size:13px;">${s.name}</span>
-            <span style="color:#fff;font-weight:bold;font-size:13px;margin-right:8px;">${s.revenue > 0 ? s.revenue.toLocaleString() + unit : ''}</span>
-            <span style="color:#aaa;font-size:11px;width:35px;">${pct}%</span>
-            <span style="color:${s.growth.includes('-')?'#F44336':'#4CAF50'};font-size:11px;">${s.growth}</span>
+          return `<div class="seg-row">
+            <span class="seg-dot" style="background:${colors[i%8]}"></span>
+            <span style="flex:1;color:#dbe3f0;font-size:13px;">${s.name}</span>
+            <span style="color:#fff;font-weight:700;font-size:13px;margin-right:8px;">${s.revenue > 0 ? s.revenue.toLocaleString() + unit : ''}</span>
+            <span style="color:#8b95a8;font-size:11px;width:35px;">${pct}%</span>
+            <span style="color:${s.growth.includes('-')?'#f87171':'#34d399'};font-size:11px;font-weight:650;">${s.growth}</span>
           </div>`;
         }).join('')}
         ${total > 0 ? `<div style="border-top:1px solid rgba(255,255,255,0.1);margin-top:8px;padding-top:6px;display:flex;justify-content:space-between;">
@@ -569,23 +722,23 @@ function renderRevenueStructure(s, idx) {
     const revG = prev.revenue ? ((cur.revenue - prev.revenue) / prev.revenue * 100).toFixed(1) : 'N/A';
     const oiG = prev.operating_income && prev.operating_income > 0 ? ((cur.operating_income - prev.operating_income) / prev.operating_income * 100).toFixed(1) : 'N/A';
     const niG = prev.net_income && prev.net_income > 0 ? ((cur.net_income - prev.net_income) / prev.net_income * 100).toFixed(1) : 'N/A';
-    const gc = (v) => parseFloat(v) > 0 ? '#4CAF50' : '#F44336';
-    growthHtml = `<div style="display:flex;gap:12px;margin:12px 0;flex-wrap:wrap;">
-      <div style="padding:8px 16px;background:rgba(255,255,255,0.05);border-radius:8px;text-align:center;"><span style="color:#aaa;font-size:11px;">매출 YoY</span><br><span style="font-size:18px;font-weight:bold;color:${gc(revG)}">${revG > 0?'+':''}${revG}%</span></div>
-      <div style="padding:8px 16px;background:rgba(255,255,255,0.05);border-radius:8px;text-align:center;"><span style="color:#aaa;font-size:11px;">영업이익 YoY</span><br><span style="font-size:18px;font-weight:bold;color:${gc(oiG)}">${oiG > 0?'+':''}${oiG}%</span></div>
-      <div style="padding:8px 16px;background:rgba(255,255,255,0.05);border-radius:8px;text-align:center;"><span style="color:#aaa;font-size:11px;">순이익 YoY</span><br><span style="font-size:18px;font-weight:bold;color:${gc(niG)}">${niG > 0?'+':''}${niG}%</span></div>
+    const gc = (v) => parseFloat(v) > 0 ? '#34d399' : '#f87171';
+    growthHtml = `<div class="stat-chips">
+      <div class="stat-chip"><span>매출 YoY</span><b style="color:${gc(revG)}">${revG > 0?'+':''}${revG}%</b></div>
+      <div class="stat-chip"><span>영업이익 YoY</span><b style="color:${gc(oiG)}">${oiG > 0?'+':''}${oiG}%</b></div>
+      <div class="stat-chip"><span>순이익 YoY</span><b style="color:${gc(niG)}">${niG > 0?'+':''}${niG}%</b></div>
     </div>`;
   }
 
   // 연도별 테이블
   const fmtVal = (v) => v ? v.toFixed(1) + unit : 'N/A';
   let tableRows = rs.map(y => `
-    <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
-      <td style="padding:6px 8px;color:#90CAF9;font-weight:bold;">${y.year}</td>
-      <td style="padding:6px 8px;">${fmtVal(y.revenue)}</td>
-      <td style="padding:6px 8px;">${fmtVal(y.gross_profit)} <span style="color:#4CAF50;font-size:11px;">${y.gross_margin}%</span></td>
-      <td style="padding:6px 8px;">${fmtVal(y.operating_income)} <span style="color:#2196F3;font-size:11px;">${y.operating_margin}%</span></td>
-      <td style="padding:6px 8px;">${fmtVal(y.net_income)} <span style="color:#66BB6A;font-size:11px;">${y.net_margin}%</span></td>
+    <tr>
+      <td style="color:#93c5fd;font-weight:700;">${y.year}</td>
+      <td>${fmtVal(y.revenue)}</td>
+      <td>${fmtVal(y.gross_profit)} <span style="color:#34d399;font-size:11px;">${y.gross_margin}%</span></td>
+      <td>${fmtVal(y.operating_income)} <span style="color:#6ea8ff;font-size:11px;">${y.operating_margin}%</span></td>
+      <td>${fmtVal(y.net_income)} <span style="color:#86efac;font-size:11px;">${y.net_margin}%</span></td>
     </tr>`).join('');
 
   return `<div class="direction-box">
@@ -602,15 +755,17 @@ function renderRevenueStructure(s, idx) {
         <canvas id="donut2_${idx}"></canvas>
       </div>
     </div>
-    <table style="width:100%;margin:16px 0;border-collapse:collapse;font-size:13px;">
-      <tr style="border-bottom:1px solid rgba(255,255,255,0.15);">
-        <th style="padding:8px;text-align:left;color:#90CAF9;">연도</th>
-        <th style="padding:8px;text-align:left;color:#90CAF9;">매출</th>
-        <th style="padding:8px;text-align:left;color:#90CAF9;">총이익 (마진)</th>
-        <th style="padding:8px;text-align:left;color:#90CAF9;">영업이익 (마진)</th>
-        <th style="padding:8px;text-align:left;color:#90CAF9;">순이익 (마진)</th>
-      </tr>
-      ${tableRows}
+    <table class="fin-table">
+      <thead>
+        <tr>
+          <th>연도</th>
+          <th>매출</th>
+          <th>총이익 (마진)</th>
+          <th>영업이익 (마진)</th>
+          <th>순이익 (마진)</th>
+        </tr>
+      </thead>
+      <tbody>${tableRows}</tbody>
     </table>
     <div class="charts-grid">
       <div class="chart-wrap"><canvas id="waterfall_${idx}"></canvas></div>
@@ -660,23 +815,29 @@ function renderStock(s, idx) {
 
   const div = document.createElement('div');
   div.className = 'stock-card';
+  const avatarLetter = (s.ticker || s.name || '?').split('.')[0].slice(0,2);
   div.innerHTML = `
     <div class="card-header">
-      <div>
-        <h2>${s.name}</h2>
-        <span class="ticker-badge">${s.ticker}</span>
-        <span class="sector">${s.sector || ''} ${s.industry ? '· '+s.industry : ''}</span>
+      <div class="name-row">
+        <div class="ticker-avatar">${avatarLetter}</div>
+        <div>
+          <h2>${s.name}</h2>
+          <span class="ticker-badge">${s.ticker}</span>
+          <span class="sector">${s.sector || ''} ${s.industry ? '· '+s.industry : ''}</span>
+        </div>
       </div>
       <div class="price-area">
         <span class="big-price">${fmtPrice(s.current_price)}</span>
         <span class="price-change ${changeClass}">${changeText}</span>
-        <div class="mcap">${fmtCap(s.market_cap, curr)}</div>
+        <div class="mcap">시가총액 ${fmtCap(s.market_cap, curr)}</div>
       </div>
     </div>
     <div class="score-banner ${grade}">
-      <div class="score-num">${s.score}</div>
+      <div class="score-ring" style="--pct:${s.score || 0}">
+        <div class="score-ring-inner"><span class="score-num">${s.score}</span></div>
+      </div>
       <div class="score-detail">
-        <div class="score-grade">${gradeEmoji} 등급 ${grade}</div>
+        <div class="score-grade">${gradeEmoji} 투자 등급 ${grade}</div>
         <div class="score-items">${scoreItems}</div>
       </div>
     </div>
@@ -710,13 +871,13 @@ function renderStock(s, idx) {
 
   new Chart(document.getElementById('price_'+idx), {
     type:'line',
-    data:{datasets:[{label:'주가 ('+sym+')',data:s.price_history,borderColor:'#1976D2',backgroundColor:'rgba(25,118,210,0.1)',fill:true,tension:0.3,pointRadius:0}]},
-    options:{responsive:true,plugins:{title:{display:true,text:'주가 추이 (1년)',font:{size:14}}},scales:{x:{type:'time',time:{unit:'month'}}}}
+    data:{datasets:[{label:'주가 ('+sym+')',data:s.price_history,borderColor:'#6ea8ff',backgroundColor:'rgba(110,168,255,0.12)',fill:true,tension:0.35,pointRadius:0}]},
+    options:{responsive:true,plugins:{title:{display:true,text:'주가 추이 (1년)'}},scales:{x:{type:'time',time:{unit:'month'}},y:{grid:{color:'rgba(255,255,255,0.06)'}}}}
   });
   new Chart(document.getElementById('per_'+idx), {
     type:'line',
-    data:{datasets:[{label:'PER',data:s.per_history,borderColor:'#F44336',backgroundColor:'rgba(244,67,54,0.1)',fill:true,tension:0.3,pointRadius:0}]},
-    options:{responsive:true,plugins:{title:{display:true,text:'PER 추이 (1년)',font:{size:14}}},scales:{x:{type:'time',time:{unit:'month'}}}}
+    data:{datasets:[{label:'PER',data:s.per_history,borderColor:'#f87171',backgroundColor:'rgba(248,113,113,0.12)',fill:true,tension:0.35,pointRadius:0}]},
+    options:{responsive:true,plugins:{title:{display:true,text:'PER 추이 (1년)'}},scales:{x:{type:'time',time:{unit:'month'}},y:{grid:{color:'rgba(255,255,255,0.06)'}}}}
   });
   if (s.quarters && s.quarters.length) {
     new Chart(document.getElementById('rev_'+idx), {
@@ -760,7 +921,7 @@ function renderStock(s, idx) {
     // 세그먼트 도넛 차트
     const seg = s.segments;
     if (seg && !seg.estimated && document.getElementById('seg_donut_'+idx)) {
-      const segColors = ['#42A5F5','#66BB6A','#FFA726','#AB47BC','#EF5350','#26C6DA','#8D6E63','#78909C'];
+      const segColors = ['rgba(66,165,245,0.8)','rgba(102,187,106,0.75)','rgba(255,167,38,0.75)','rgba(171,71,188,0.7)','rgba(239,83,80,0.7)','rgba(38,198,218,0.7)','rgba(141,110,99,0.7)','rgba(120,144,156,0.65)'];
       const segTotal = seg.segments.reduce((a,b)=>a+b.revenue,0);
       new Chart(document.getElementById('seg_donut_'+idx), {
         type: 'doughnut',
@@ -812,7 +973,7 @@ function renderStock(s, idx) {
         labels: ['매출원가 '+((latest.cost_of_revenue/latest.revenue)*100).toFixed(0)+'%', '매출총이익 '+latest.gross_margin+'%'],
         datasets: [{
           data: [latest.cost_of_revenue, latest.gross_profit],
-          backgroundColor: ['#EF5350', '#66BB6A'],
+          backgroundColor: ['rgba(239,83,80,0.75)', 'rgba(102,187,106,0.75)'],
           ...donutStyle,
         }]
       },
@@ -838,11 +999,11 @@ function renderStock(s, idx) {
     const donut2Labels = [];
     const donut2Colors = [];
 
-    if (latest.net_income > 0) { donut2Labels.push('순이익 '+latest.net_margin+'%'); donut2Data.push(latest.net_income); donut2Colors.push('#42A5F5'); }
-    else if (latest.operating_income > 0) { donut2Labels.push('영업이익'); donut2Data.push(latest.operating_income); donut2Colors.push('#42A5F5'); }
-    if (smExp > 0) { donut2Labels.push('판매&마케팅'); donut2Data.push(smExp); donut2Colors.push('#FFA726'); }
-    if (latest.rnd > 0) { donut2Labels.push('R&D'); donut2Data.push(latest.rnd); donut2Colors.push('#AB47BC'); }
-    if (otherExp > 0) { donut2Labels.push('기타 비용'); donut2Data.push(otherExp); donut2Colors.push('#78909C'); }
+    if (latest.net_income > 0) { donut2Labels.push('순이익 '+latest.net_margin+'%'); donut2Data.push(latest.net_income); donut2Colors.push('rgba(66,165,245,0.8)'); }
+    else if (latest.operating_income > 0) { donut2Labels.push('영업이익'); donut2Data.push(latest.operating_income); donut2Colors.push('rgba(66,165,245,0.8)'); }
+    if (smExp > 0) { donut2Labels.push('판매&마케팅'); donut2Data.push(smExp); donut2Colors.push('rgba(255,167,38,0.7)'); }
+    if (latest.rnd > 0) { donut2Labels.push('R&D'); donut2Data.push(latest.rnd); donut2Colors.push('rgba(171,71,188,0.7)'); }
+    if (otherExp > 0) { donut2Labels.push('기타 비용'); donut2Data.push(otherExp); donut2Colors.push('rgba(120,144,156,0.6)'); }
 
     new Chart(document.getElementById('donut2_'+idx), {
       type: 'doughnut',
