@@ -419,47 +419,106 @@ function renderRevenueStructure(s, idx) {
   if (!rs || !rs.length) return '';
   const latest = rs[0];
   const unit = latest.unit || '$B';
+  const curr = s.currency || 'USD';
+  const sym = curr === 'KRW' ? '₩' : '$';
 
-  // 워터폴 데이터
-  const wfLabels = ['매출', '매출원가', '매출총이익', '판관비+R&D', '영업이익', '기타', '순이익'];
-  const wfValues = [latest.revenue, -latest.cost_of_revenue, latest.gross_profit,
-    -(latest.sga + latest.rnd), latest.operating_income,
-    latest.net_income - latest.operating_income, latest.net_income];
-  const wfColors = wfValues.map(v => v >= 0 ? 'rgba(76,175,80,0.8)' : 'rgba(244,67,54,0.8)');
-
-  // 연도별 비교 테이블
-  let tableRows = rs.map(y => `
-    <tr>
-      <td style="color:#90CAF9;font-weight:bold;">${y.year}</td>
-      <td>${y.revenue}${unit}</td>
-      <td>${y.gross_profit}${unit} <span style="color:#aaa;font-size:11px">(${y.gross_margin}%)</span></td>
-      <td>${y.operating_income}${unit} <span style="color:#aaa;font-size:11px">(${y.operating_margin}%)</span></td>
-      <td>${y.net_income}${unit} <span style="color:#aaa;font-size:11px">(${y.net_margin}%)</span></td>
-    </tr>`).join('');
-
-  // 전년 대비 성장률
+  // 연도별 성장률
   let growthHtml = '';
   if (rs.length >= 2) {
     const cur = rs[0], prev = rs[1];
     const revG = prev.revenue ? ((cur.revenue - prev.revenue) / prev.revenue * 100).toFixed(1) : 'N/A';
-    const oiG = prev.operating_income ? ((cur.operating_income - prev.operating_income) / prev.operating_income * 100).toFixed(1) : 'N/A';
-    const niG = prev.net_income ? ((cur.net_income - prev.net_income) / prev.net_income * 100).toFixed(1) : 'N/A';
-    const gc = (v) => v > 0 ? '#4CAF50' : '#F44336';
-    growthHtml = `<div style="display:flex;gap:16px;margin-top:12px;flex-wrap:wrap;">
-      <div style="padding:8px 16px;background:rgba(255,255,255,0.05);border-radius:8px;"><span style="color:#aaa;font-size:12px;">매출 성장</span><br><span style="font-size:18px;font-weight:bold;color:${gc(revG)}">${revG > 0?'+':''}${revG}%</span></div>
-      <div style="padding:8px 16px;background:rgba(255,255,255,0.05);border-radius:8px;"><span style="color:#aaa;font-size:12px;">영업이익 성장</span><br><span style="font-size:18px;font-weight:bold;color:${gc(oiG)}">${oiG > 0?'+':''}${oiG}%</span></div>
-      <div style="padding:8px 16px;background:rgba(255,255,255,0.05);border-radius:8px;"><span style="color:#aaa;font-size:12px;">순이익 성장</span><br><span style="font-size:18px;font-weight:bold;color:${gc(niG)}">${niG > 0?'+':''}${niG}%</span></div>
+    const oiG = prev.operating_income && prev.operating_income > 0 ? ((cur.operating_income - prev.operating_income) / prev.operating_income * 100).toFixed(1) : 'N/A';
+    const niG = prev.net_income && prev.net_income > 0 ? ((cur.net_income - prev.net_income) / prev.net_income * 100).toFixed(1) : 'N/A';
+    const gc = (v) => parseFloat(v) > 0 ? '#4CAF50' : '#F44336';
+    growthHtml = `<div style="display:flex;gap:12px;margin:12px 0;flex-wrap:wrap;">
+      <div style="padding:8px 16px;background:rgba(255,255,255,0.05);border-radius:8px;text-align:center;"><span style="color:#aaa;font-size:11px;">매출 YoY</span><br><span style="font-size:18px;font-weight:bold;color:${gc(revG)}">${revG > 0?'+':''}${revG}%</span></div>
+      <div style="padding:8px 16px;background:rgba(255,255,255,0.05);border-radius:8px;text-align:center;"><span style="color:#aaa;font-size:11px;">영업이익 YoY</span><br><span style="font-size:18px;font-weight:bold;color:${gc(oiG)}">${oiG > 0?'+':''}${oiG}%</span></div>
+      <div style="padding:8px 16px;background:rgba(255,255,255,0.05);border-radius:8px;text-align:center;"><span style="color:#aaa;font-size:11px;">순이익 YoY</span><br><span style="font-size:18px;font-weight:bold;color:${gc(niG)}">${niG > 0?'+':''}${niG}%</span></div>
     </div>`;
   }
 
+  // Sankey 스타일 현금흐름 다이어그램 (HTML/CSS로 구현)
+  const rev = latest.revenue;
+  const cogs = latest.cost_of_revenue;
+  const gross = latest.gross_profit;
+  const sga = latest.sga;
+  const rnd = latest.rnd;
+  const oi = latest.operating_income;
+  const ni = latest.net_income;
+  const gm = latest.gross_margin;
+  const om = latest.operating_margin;
+  const nm = latest.net_margin;
+
+  const fmtVal = (v) => v ? v.toFixed(1) + unit : 'N/A';
+  const barPct = (v) => Math.max(2, Math.min(95, v / rev * 100));
+
+  const flowHtml = `
+  <div style="margin:16px 0;">
+    <div style="display:flex;align-items:center;margin-bottom:4px;">
+      <span style="width:100px;font-size:12px;color:#90CAF9;text-align:right;padding-right:8px;">매출</span>
+      <div style="flex:1;height:32px;background:linear-gradient(90deg,#1976D2,#1565C0);border-radius:4px;display:flex;align-items:center;padding:0 12px;">
+        <span style="color:#fff;font-weight:bold;font-size:13px;">${fmtVal(rev)} (100%)</span>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;margin-bottom:4px;">
+      <span style="width:100px;font-size:12px;color:#EF9A9A;text-align:right;padding-right:8px;">매출원가</span>
+      <div style="width:${barPct(cogs)}%;height:24px;background:linear-gradient(90deg,#F44336,#D32F2F);border-radius:4px;display:flex;align-items:center;padding:0 12px;">
+        <span style="color:#fff;font-size:12px;">${fmtVal(cogs)} (${(cogs/rev*100).toFixed(0)}%)</span>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;margin-bottom:4px;">
+      <span style="width:100px;font-size:12px;color:#81C784;text-align:right;padding-right:8px;">매출총이익</span>
+      <div style="width:${barPct(gross)}%;height:28px;background:linear-gradient(90deg,#4CAF50,#388E3C);border-radius:4px;display:flex;align-items:center;padding:0 12px;">
+        <span style="color:#fff;font-weight:bold;font-size:12px;">${fmtVal(gross)} (${gm}% 마진)</span>
+      </div>
+    </div>
+    <div style="padding-left:100px;margin:8px 0 4px;border-left:2px solid rgba(76,175,80,0.3);margin-left:100px;">
+      <div style="display:flex;align-items:center;margin-bottom:3px;">
+        <span style="width:80px;font-size:11px;color:#FFB74D;padding-right:8px;">판매&마케팅</span>
+        <div style="width:${barPct(sga-rnd > 0 ? sga-rnd : sga)}%;height:18px;background:#FF9800;border-radius:3px;display:flex;align-items:center;padding:0 8px;">
+          <span style="color:#fff;font-size:11px;">${fmtVal(sga > rnd ? sga-rnd : sga)}</span>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;margin-bottom:3px;">
+        <span style="width:80px;font-size:11px;color:#CE93D8;padding-right:8px;">R&D</span>
+        <div style="width:${barPct(rnd)}%;height:18px;background:#9C27B0;border-radius:3px;display:flex;align-items:center;padding:0 8px;">
+          <span style="color:#fff;font-size:11px;">${fmtVal(rnd)}</span>
+        </div>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;margin-bottom:4px;">
+      <span style="width:100px;font-size:12px;color:#64B5F6;text-align:right;padding-right:8px;">영업이익</span>
+      <div style="width:${barPct(oi)}%;height:28px;background:linear-gradient(90deg,#2196F3,#1565C0);border-radius:4px;display:flex;align-items:center;padding:0 12px;">
+        <span style="color:#fff;font-weight:bold;font-size:12px;">${fmtVal(oi)} (${om}% 마진)</span>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;">
+      <span style="width:100px;font-size:12px;color:#A5D6A7;text-align:right;padding-right:8px;">순이익</span>
+      <div style="width:${barPct(ni)}%;height:28px;background:linear-gradient(90deg,#66BB6A,#2E7D32);border-radius:4px;display:flex;align-items:center;padding:0 12px;">
+        <span style="color:#fff;font-weight:bold;font-size:12px;">${fmtVal(ni)} (${nm}% 마진)</span>
+      </div>
+    </div>
+  </div>`;
+
+  // 연도별 테이블
+  let tableRows = rs.map(y => `
+    <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+      <td style="padding:6px 8px;color:#90CAF9;font-weight:bold;">${y.year}</td>
+      <td style="padding:6px 8px;">${fmtVal(y.revenue)}</td>
+      <td style="padding:6px 8px;">${fmtVal(y.gross_profit)} <span style="color:#4CAF50;font-size:11px;">${y.gross_margin}%</span></td>
+      <td style="padding:6px 8px;">${fmtVal(y.operating_income)} <span style="color:#2196F3;font-size:11px;">${y.operating_margin}%</span></td>
+      <td style="padding:6px 8px;">${fmtVal(y.net_income)} <span style="color:#66BB6A;font-size:11px;">${y.net_margin}%</span></td>
+    </tr>`).join('');
+
   return `<div class="direction-box">
-    <div class="direction-title" style="margin-bottom:16px;">💰 수익 구조 분석 (${latest.year})</div>
+    <div class="direction-title" style="margin-bottom:8px;">💰 수익 구조 (${latest.year})</div>
     ${growthHtml}
+    ${flowHtml}
     <table style="width:100%;margin:16px 0;border-collapse:collapse;font-size:13px;">
-      <tr style="border-bottom:1px solid rgba(255,255,255,0.1);">
+      <tr style="border-bottom:1px solid rgba(255,255,255,0.15);">
         <th style="padding:8px;text-align:left;color:#90CAF9;">연도</th>
         <th style="padding:8px;text-align:left;color:#90CAF9;">매출</th>
-        <th style="padding:8px;text-align:left;color:#90CAF9;">매출총이익 (마진)</th>
+        <th style="padding:8px;text-align:left;color:#90CAF9;">총이익 (마진)</th>
         <th style="padding:8px;text-align:left;color:#90CAF9;">영업이익 (마진)</th>
         <th style="padding:8px;text-align:left;color:#90CAF9;">순이익 (마진)</th>
       </tr>
